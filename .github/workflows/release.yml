@@ -1,0 +1,262 @@
+name: Release
+
+# Gera o AAB de release assinado com a chave de upload e guarda AAB + mapping.txt como artefatos.
+# Dispara com tags v* (por exemplo, v1.0.0, igual ao versionName) ou à mão (Actions > Release >
+# Run workflow). O envio ao Google Play é opcional e fica desligado por padrão. Passo a passo,
+# segredos e variáveis: docs/PUBLICACAO.md.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      play_track:
+        description: "Enviar ao Google Play (exige o segredo PLAY_SERVICE_ACCOUNT_JSON)"
+        type: choice
+        options:
+          - nenhum
+          - internal
+          - alpha
+        default: nenhum
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Opcionais: substituem meuSantinho.privacyPolicyUrl e meuSantinho.contactEmail de
+  # gradle.properties. Não são segredos (aparecem no app e na loja): use variáveis do repositório;
+  # segredos com o mesmo nome também funcionam. Vazias = valem os de gradle.properties.
+  MEU_SANTINHO_PRIVACY_POLICY_URL: ${{ vars.MEU_SANTINHO_PRIVACY_POLICY_URL || secrets.MEU_SANTINHO_PRIVACY_POLICY_URL }}
+  MEU_SANTINHO_CONTACT_EMAIL: ${{ vars.MEU_SANTINHO_CONTACT_EMAIL || secrets.MEU_SANTINHO_CONTACT_EMAIL }}
+
+jobs:
+  verify:
+    name: Ficha da loja, lint e testes unitários
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Ficha da loja e política de privacidade prontas
+        run: scripts/check-store-metadata.sh --release
+
+      - name: JDKs 21 e 17 (Temurin)
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          # Como no ci.yml: compila no toolchain 17; o Robolectric (SDK 36) roda os testes no 21.
+          # O último da lista vira o JAVA_HOME, então o próprio Gradle roda no 17.
+          java-version: |
+            21
+            17
+
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Lint e testes unitários
+        run: |
+          args=()
+          if [ -n "$MEU_SANTINHO_PRIVACY_POLICY_URL" ]; then args+=("-PmeuSantinho.privacyPolicyUrl=$MEU_SANTINHO_PRIVACY_POLICY_URL"); fi
+          if [ -n "$MEU_SANTINHO_CONTACT_EMAIL" ]; then args+=("-PmeuSantinho.contactEmail=$MEU_SANTINHO_CONTACT_EMAIL"); fi
+          ./gradlew "${args[@]}" lint testDebugUnitTest
+
+      - name: Publicar relatórios do lint e dos testes
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: relatorios-release
+          path: |
+            app/build/reports/lint-results-*
+            app/build/reports/tests/
+          if-no-files-found: ignore
+
+  bundle:
+    name: AAB de release assinado
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      version_name: ${{ steps.version.outputs.version_name }}
+      version_code: ${{ steps.version.outputs.version_code }}
+      application_id: ${{ steps.version.outputs.application_id }}
+      artifact: ${{ steps.version.outputs.artifact }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Versão (tag, versionName, versionCode e novidades)
+        id: version
+        run: |
+          gradle_file=app/build.gradle.kts
+          version_name=$(sed -nE 's/^[[:space:]]*versionName = "([^"]+)".*/\1/p' "$gradle_file" | head -n 1)
+          version_code=$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*/\1/p' "$gradle_file" | head -n 1)
+          application_id=$(sed -nE 's/^[[:space:]]*applicationId = "([^"]+)".*/\1/p' "$gradle_file" | head -n 1)
+          if [ -z "$version_name" ] || [ -z "$version_code" ] || [ -z "$application_id" ]; then
+            echo "::error file=$gradle_file::Nao consegui ler versionName, versionCode ou applicationId."
+            exit 1
+          fi
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version_name" ]; then
+            echo "::error::A tag $GITHUB_REF_NAME nao corresponde ao versionName $version_name (esperado v$version_name)."
+            exit 1
+          fi
+          changelog="fastlane/metadata/android/pt-BR/changelogs/$version_code.txt"
+          if [ ! -f "$changelog" ]; then
+            echo "::error::Falta $changelog com as novidades do versionCode $version_code."
+            exit 1
+          fi
+          {
+            echo "version_name=$version_name"
+            echo "version_code=$version_code"
+            echo "application_id=$application_id"
+            echo "artifact=meu-santinho-$version_name-$version_code"
+          } >> "$GITHUB_OUTPUT"
+          echo "Versao $version_name (versionCode $version_code), pacote $application_id" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Conferir os segredos de assinatura
+        env:
+          KEYSTORE_BASE64: ${{ secrets.MEU_SANTINHO_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.MEU_SANTINHO_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.MEU_SANTINHO_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.MEU_SANTINHO_KEY_PASSWORD }}
+        run: |
+          # Só nomes vão para o log, nunca valores.
+          missing=()
+          [ -n "$KEYSTORE_BASE64" ] || missing+=(MEU_SANTINHO_KEYSTORE_BASE64)
+          [ -n "$KEYSTORE_PASSWORD" ] || missing+=(MEU_SANTINHO_KEYSTORE_PASSWORD)
+          [ -n "$KEY_ALIAS" ] || missing+=(MEU_SANTINHO_KEY_ALIAS)
+          [ -n "$KEY_PASSWORD" ] || missing+=(MEU_SANTINHO_KEY_PASSWORD)
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Segredos de assinatura ausentes: ${missing[*]} (ver docs/PUBLICACAO.md)."
+            exit 1
+          fi
+
+      - name: Decodificar a chave de upload em $RUNNER_TEMP
+        env:
+          KEYSTORE_BASE64: ${{ secrets.MEU_SANTINHO_KEYSTORE_BASE64 }}
+        run: |
+          keystore="$RUNNER_TEMP/upload-keystore.jks"
+          umask 077
+          if ! printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore" || [ ! -s "$keystore" ]; then
+            echo "::error::MEU_SANTINHO_KEYSTORE_BASE64 nao e um base64 valido do keystore."
+            exit 1
+          fi
+          echo "MEU_SANTINHO_KEYSTORE=$keystore" >> "$GITHUB_ENV"
+
+      - name: JDKs 21 e 17 (Temurin)
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: |
+            21
+            17
+
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: bundleRelease (assinado)
+        env:
+          MEU_SANTINHO_KEYSTORE_PASSWORD: ${{ secrets.MEU_SANTINHO_KEYSTORE_PASSWORD }}
+          MEU_SANTINHO_KEY_ALIAS: ${{ secrets.MEU_SANTINHO_KEY_ALIAS }}
+          MEU_SANTINHO_KEY_PASSWORD: ${{ secrets.MEU_SANTINHO_KEY_PASSWORD }}
+        run: |
+          # A trava de release do app/build.gradle.kts falha aqui se a URL da política ou o e-mail
+          # ainda forem marcadores example.com.
+          args=()
+          if [ -n "$MEU_SANTINHO_PRIVACY_POLICY_URL" ]; then args+=("-PmeuSantinho.privacyPolicyUrl=$MEU_SANTINHO_PRIVACY_POLICY_URL"); fi
+          if [ -n "$MEU_SANTINHO_CONTACT_EMAIL" ]; then args+=("-PmeuSantinho.contactEmail=$MEU_SANTINHO_CONTACT_EMAIL"); fi
+          ./gradlew "${args[@]}" bundleRelease
+
+      - name: Conferir a assinatura do AAB
+        run: |
+          aab=app/build/outputs/bundle/release/app-release.aab
+          if ! jarsigner -verify "$aab" | grep -q "jar verified"; then
+            echo "::error file=$aab::O AAB nao esta assinado."
+            exit 1
+          fi
+          # Impressão digital pública do certificado de upload (confira com Play Console > Integridade do app).
+          keytool -printcert -jarfile "$aab" | grep -E "SHA256:" | sed 's/^[[:space:]]*/Certificado de upload /' | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Apagar a chave de upload
+        if: always()
+        run: rm -f "$RUNNER_TEMP/upload-keystore.jks"
+
+      - name: Guardar AAB e mapping.txt
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.version.outputs.artifact }}
+          path: |
+            app/build/outputs/bundle/release/app-release.aab
+            app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: error
+          retention-days: 90
+
+  play:
+    name: Enviar ao Google Play (opcional)
+    needs: bundle
+    # Desligado por padrão: só roda com play_track escolhido no disparo manual ou, em tags, com a
+    # variável PLAY_UPLOAD_TRACK definida (internal ou alpha). Produção nunca é automática.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.play_track != 'nenhum') ||
+      (github.event_name == 'push' && vars.PLAY_UPLOAD_TRACK != '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Permite guardar PLAY_SERVICE_ACCOUNT_JSON como segredo do ambiente e exigir aprovação manual.
+    environment: google-play
+    steps:
+      - name: Conferir trilha, status e conta de serviço
+        id: check
+        env:
+          SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          TRACK: ${{ github.event_name == 'workflow_dispatch' && inputs.play_track || vars.PLAY_UPLOAD_TRACK }}
+          STATUS: ${{ vars.PLAY_RELEASE_STATUS || 'draft' }}
+        run: |
+          if [ -z "$SERVICE_ACCOUNT_JSON" ]; then
+            echo "::error::Envio pedido, mas o segredo PLAY_SERVICE_ACCOUNT_JSON nao existe (ver docs/PUBLICACAO.md)."
+            exit 1
+          fi
+          case "$TRACK" in
+            internal | alpha) ;;
+            *) echo "::error::Trilha invalida: '$TRACK' (use internal ou alpha)."; exit 1 ;;
+          esac
+          case "$STATUS" in
+            draft | completed) ;;
+            *) echo "::error::PLAY_RELEASE_STATUS invalido: '$STATUS' (use draft ou completed)."; exit 1 ;;
+          esac
+          echo "track=$TRACK" >> "$GITHUB_OUTPUT"
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout (novidades da versão)
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: fastlane/metadata/android
+
+      - name: Baixar AAB e mapping.txt
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.bundle.outputs.artifact }}
+          path: ${{ runner.temp }}/release
+
+      - name: Novidades da versão (whatsnew-pt-BR)
+        env:
+          VERSION_CODE: ${{ needs.bundle.outputs.version_code }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/whatsnew"
+          cp "fastlane/metadata/android/pt-BR/changelogs/$VERSION_CODE.txt" "$RUNNER_TEMP/whatsnew/whatsnew-pt-BR"
+
+      - name: Enviar à trilha ${{ steps.check.outputs.track }}
+        # Ação de terceiros fixada pelo commit (v1.1.5); ela recebe a credencial da conta de serviço.
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: ${{ needs.bundle.outputs.application_id }}
+          releaseFiles: ${{ runner.temp }}/release/bundle/release/app-release.aab
+          mappingFile: ${{ runner.temp }}/release/mapping/release/mapping.txt
+          tracks: ${{ steps.check.outputs.track }}
+          status: ${{ steps.check.outputs.status }}
+          releaseName: ${{ needs.bundle.outputs.version_name }} (${{ needs.bundle.outputs.version_code }})
+          whatsNewDirectory: ${{ runner.temp }}/whatsnew

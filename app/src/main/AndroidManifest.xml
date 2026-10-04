@@ -25,16 +25,31 @@
         android:theme="@style/Theme.MeuSantinho"
         tools:targetApi="33">
 
-        <!-- Único componente exportado. -->
+        <!-- Único componente exportado. Edge-to-edge: o Compose trata os insets, inclusive do teclado. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.MeuSantinho.Starting">
+            android:theme="@style/Theme.MeuSantinho.Starting"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            Compartilhamento da imagem da cola: só o diretório cacheDir/shared/ (xml/file_paths),
+            sem exportar o provider; o app concede leitura por URI a quem recebe o compartilhamento.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <!--
             WorkManager é configurado pela MeuSantinhoApplication (Configuration.Provider com o

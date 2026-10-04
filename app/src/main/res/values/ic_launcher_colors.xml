@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Cores do ícone do app (camadas em drawable/ic_launcher_*.xml). Paleta só de cinza-azulado,
+    preto e branco: nenhuma cor associada a partido, candidato ou à bandeira. As imagens da loja
+    (fastlane/metadata/android/pt-BR/images) são geradas destas mesmas cores por
+    scripts/render-store-graphics.py; mude aqui e gere de novo.
+-->
+<resources>
+    <!-- Igual a brand_neutral (colors.xml), que é o fundo do splash: ícone e splash combinam. -->
+    <color name="ic_launcher_background">#FF37474F</color>
+    <!-- Cartão de papel. -->
+    <color name="ic_launcher_paper">#FFFFFFFF</color>
+    <!-- Caixas dos dígitos e linhas de texto, vazias: o ícone não mostra número nem nome. -->
+    <color name="ic_launcher_field">#FFCFD8DC</color>
+    <!-- Selo do visto. -->
+    <color name="ic_launcher_ink">#FF263238</color>
+    <color name="ic_launcher_on_ink">#FFFFFFFF</color>
+    <!-- Sombra curta do cartão (20% de preto). -->
+    <color name="ic_launcher_shadow">#33000000</color>
+    <!-- Ícone temático (Android 13+): o sistema usa só o alfa e aplica a cor do tema. -->
+    <color name="ic_launcher_monochrome">#FF000000</color>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Único diretório exposto pelo FileProvider: cacheDir/shared/, onde fica a imagem temporária da
+    cola compartilhada (apagada na próxima abertura do app). Nada mais do app é acessível.
+-->
+<paths>
+    <cache-path
+        name="shared"
+        path="shared/" />
+</paths>

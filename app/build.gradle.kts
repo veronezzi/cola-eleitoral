@@ -31,6 +31,50 @@ fun publishingProperty(name: String): String =
     providers.gradleProperty(name).orNull?.takeIf { it.isNotBlank() }
         ?: throw GradleException("Propriedade de publicacao ausente: $name (ver gradle.properties).")
 
+// Guarda de release: nenhuma tarefa da variante release (assembleRelease, bundleRelease, lintRelease...)
+// roda enquanto a URL da política de privacidade ou o e-mail de contato forem os marcadores
+// "example.com" de gradle.properties. A checagem é feita na execução, a partir de pre*ReleaseBuild,
+// então debug, lint, testDebugUnitTest e o CI não são afetados. Ver docs/PUBLICACAO.md.
+val checkReleasePublishingProperties = tasks.register("checkReleasePublishingProperties") {
+    group = "verification"
+    description = "Falha se meuSantinho.privacyPolicyUrl ou meuSantinho.contactEmail ainda forem marcadores."
+    val privacyPolicyUrl = providers.gradleProperty("meuSantinho.privacyPolicyUrl").orElse("")
+    val contactEmail = providers.gradleProperty("meuSantinho.contactEmail").orElse("")
+    inputs.property("privacyPolicyUrl", privacyPolicyUrl)
+    inputs.property("contactEmail", contactEmail)
+    doLast {
+        val url = privacyPolicyUrl.get().trim()
+        val email = contactEmail.get().trim()
+        // Sem acentos de propósito, como as outras mensagens deste arquivo.
+        val problems = buildList {
+            when {
+                "example.com" in url.lowercase() -> add("meuSantinho.privacyPolicyUrl ainda e o marcador: $url")
+                !url.startsWith("https://") -> add("meuSantinho.privacyPolicyUrl precisa comecar com https://: $url")
+            }
+            when {
+                "example.com" in email.lowercase() -> add("meuSantinho.contactEmail ainda e o marcador: $email")
+                !Regex("""[^@\s]+@[^@\s]+\.[^@\s]+""").matches(email) ->
+                    add("meuSantinho.contactEmail nao parece um e-mail: $email")
+            }
+        }
+        if (problems.isNotEmpty()) {
+            throw GradleException(
+                problems.joinToString(
+                    separator = "\n",
+                    prefix = "Build de release bloqueado: dados de publicacao invalidos.\n",
+                    postfix = "\nDefina os valores reais em gradle.properties ou na linha de comando, por exemplo:\n" +
+                        "  ./gradlew bundleRelease -PmeuSantinho.privacyPolicyUrl=https://... " +
+                        "-PmeuSantinho.contactEmail=...\n" +
+                        "Veja docs/PUBLICACAO.md.",
+                ) { "  - $it" },
+            )
+        }
+    }
+}
+tasks.named { it.startsWith("pre") && it.endsWith("ReleaseBuild") }.configureEach {
+    dependsOn(checkReleasePublishingProperties)
+}
+
 android {
     namespace = "com.veronezzi.meusantinho"
     // 37 porque as versões estáveis atuais de core, Compose, navigation e material3-adaptive exigem

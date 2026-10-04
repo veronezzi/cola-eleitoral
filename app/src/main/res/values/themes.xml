@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Tema da janela; a interface em si é desenhada pelo Compose (MaterialTheme). -->
-    <style name="Theme.MeuSantinho" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+        Tema da janela; a interface em si é desenhada pelo Compose (MeuSantinhoTheme).
+        Descende de Theme.AppCompat porque o androidx.biometric, no Android 8.x, mostra o diálogo
+        de digital com o AlertDialog do AppCompat, que exige um tema AppCompat na Activity.
+        As barras do sistema são transparentes (edge-to-edge, enableEdgeToEdge na MainActivity).
+    -->
+    <style name="Theme.MeuSantinho" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
 
     <!-- Splash (core-splashscreen); MainActivity chama installSplashScreen() antes de super.onCreate. -->
     <style name="Theme.MeuSantinho.Starting" parent="Theme.SplashScreen">

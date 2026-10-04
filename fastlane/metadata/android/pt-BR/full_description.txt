@@ -1,0 +1,42 @@
+O Meu Santinho é um aplicativo independente, sem vínculo com o Tribunal Superior Eleitoral (TSE), a Justiça Eleitoral, órgãos de governo, partidos ou candidatos. O app não representa nenhum governo nem entidade política.
+
+Fonte dos dados: Tribunal Superior Eleitoral (TSE), dados públicos, licença CC BY.
+• Sistema DivulgaCandContas do TSE: https://divulgacandcontas.tse.jus.br/divulga/
+• Portal de Dados Abertos do TSE, usado quando o DivulgaCandContas não responde: https://dadosabertos.tse.jus.br/
+Confira sempre as informações no site oficial do TSE.
+
+Com o Meu Santinho você consulta as candidaturas publicadas pelo TSE, salva suas escolhas e leva a cola em papel no dia da eleição. O celular não pode entrar na cabine de votação (Lei 9.504/97, art. 91-A), mas a cola em papel pode.
+
+O que o app faz
+• Mostra as eleições publicadas pelo TSE, gerais e municipais, de 1º e 2º turno.
+• Lista todos os candidatos que o TSE informa para cada cargo do seu local de votação, em ordem de número, com nome de urna, partido, coligação ou federação e a situação da candidatura como o TSE publica (por exemplo, deferido ou indeferido).
+• Busca por nome, número ou partido, com filtros por partido e por situação.
+• Mostra o detalhe de cada candidatura, com vice ou suplentes, e o link para a página oficial no site do TSE.
+• Guarda uma escolha por voto, na ordem da urna, com o número de dígitos de cada cargo. Em 2026, cada eleitor vota em 2 senadores: o app guarda as 2 escolhas e avisa se o mesmo candidato for repetido (na urna, o segundo voto repetido é anulado).
+• Gera a cola para imprimir ou salvar em PDF pelo sistema de impressão do Android, ou para compartilhar como imagem.
+• Funciona sem internet depois que os dados do seu local são baixados: as escolhas e a cola continuam disponíveis no dia da eleição.
+• Lembrete opcional no dia da votação. A notificação nunca mostra nomes nem números.
+
+Privacidade
+• Sem conta, sem anúncios, sem analytics, sem rastreamento e sem SDKs de terceiros.
+• Suas escolhas ficam só neste aparelho, cifradas, e não entram no backup na nuvem. O desenvolvedor não recebe nenhum dado.
+• As consultas vão direto do aparelho para o TSE, que recebe o endereço IP e o local consultado, como em qualquer acesso ao site oficial.
+• Bloqueio opcional com biometria ou com o bloqueio de tela do aparelho, e proteção contra captura de tela nas telas que mostram suas escolhas.
+• Uma opção apaga todos os dados do app no aparelho.
+
+Neutralidade
+• Nenhum candidato é recomendado, destacado ou patrocinado. A ordem padrão é por número.
+• Aparecem todos os candidatos que o TSE lista para os filtros escolhidos, com a situação oficial sem alterações.
+• O app não faz enquetes nem rankings e não mostra os "mais buscados".
+
+Acessibilidade
+• Compatível com o leitor de tela TalkBack, com números lidos dígito por dígito.
+• Textos que acompanham o tamanho de fonte do sistema, tema claro e escuro e bom contraste.
+• Layout para celulares, tablets e dobráveis.
+
+Limitações
+• O app depende dos sistemas do TSE. Fora do Brasil, com VPN ou em algumas redes, o TSE pode recusar as consultas; nesse caso o app mostra os dados já salvos e o link para o site oficial.
+• O Portal de Dados Abertos é usado só nas eleições gerais e não traz fotos nem o detalhe das candidaturas.
+• Voto de legenda, branco ou nulo e eleições suplementares ainda não fazem parte do app.
+
+Dúvidas e sugestões: use o e-mail de contato do desenvolvedor informado nesta página.

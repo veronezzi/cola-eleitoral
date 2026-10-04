@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Camada monocromática (ícones temáticos do Android 13+): o sistema usa só o alfa e pinta com a
+    cor do tema. Mesmo desenho da frente, em uma cor: o cartão é sólido, as caixas, as linhas e o
+    selo são vazados (evenOdd) e o visto fica sólido dentro do selo.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="@color/ic_launcher_monochrome"
+        android:fillType="evenOdd"
+        android:pathData="M40,28h28a5,5 0,0 1,5 5v42a5,5 0,0 1,-5 5h-28a5,5 0,0 1,-5 -5v-42a5,5 0,0 1,5 -5z M41.5,35h5a1.5,1.5 0,0 1,1.5 1.5v8a1.5,1.5 0,0 1,-1.5 1.5h-5a1.5,1.5 0,0 1,-1.5 -1.5v-8a1.5,1.5 0,0 1,1.5 -1.5z M51.5,35h5a1.5,1.5 0,0 1,1.5 1.5v8a1.5,1.5 0,0 1,-1.5 1.5h-5a1.5,1.5 0,0 1,-1.5 -1.5v-8a1.5,1.5 0,0 1,1.5 -1.5z M61.5,35h5a1.5,1.5 0,0 1,1.5 1.5v8a1.5,1.5 0,0 1,-1.5 1.5h-5a1.5,1.5 0,0 1,-1.5 -1.5v-8a1.5,1.5 0,0 1,1.5 -1.5z M41.5,51h25a1.5,1.5 0,0 1,0 3h-25a1.5,1.5 0,0 1,0 -3z M41.5,57h13a1.5,1.5 0,0 1,0 3h-13a1.5,1.5 0,0 1,0 -3z M54,69a8,8 0,1 1,16 0a8,8 0,1 1,-16 0z" />
+    <path
+        android:pathData="M58.3,69.3l2.6,2.6l4.9,-4.9"
+        android:strokeWidth="2.4"
+        android:strokeColor="@color/ic_launcher_monochrome"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

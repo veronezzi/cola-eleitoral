@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Política de privacidade do Meu Santinho</title>
+<meta name="description" content="Como o app Meu Santinho trata dados: nada é coletado pelo desenvolvedor; as escolhas ficam só no aparelho, cifradas; as consultas vão direto ao TSE.">
+<meta name="color-scheme" content="light dark">
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1d2327;
+    --muted: #4a565d;
+    --border: #c9d1d6;
+    --surface: #f2f5f7;
+    --link: #0b5394;
+    --focus: #b35900;
+    --mark-bg: #fff0b3;
+    --mark-text: #1d2327;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121518;
+      --text: #e8ecef;
+      --muted: #b3bec5;
+      --border: #3b464d;
+      --surface: #1c2125;
+      --link: #8ab8f0;
+      --focus: #ffb366;
+      --mark-bg: #5c4b00;
+      --mark-text: #fff6d6;
+    }
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+    font-size: 1.0625rem;
+    line-height: 1.6;
+  }
+  .skip {
+    position: absolute;
+    left: 1rem;
+    top: -4rem;
+    padding: .5rem 1rem;
+    background: var(--surface);
+    color: var(--text);
+    border: 2px solid var(--focus);
+    z-index: 1;
+  }
+  .skip:focus { top: 1rem; }
+  header, main, footer { max-width: 46rem; margin: 0 auto; padding: 0 1rem; }
+  header { padding-top: 2rem; }
+  h1 { font-size: 1.75rem; line-height: 1.25; margin: 0 0 .5rem; }
+  h2 { font-size: 1.3rem; line-height: 1.3; margin: 2.25rem 0 .75rem; }
+  p, ul { margin: 0 0 1rem; }
+  li { margin-bottom: .4rem; }
+  .meta { color: var(--muted); margin-bottom: 1.5rem; }
+  a { color: var(--link); text-underline-offset: .15em; }
+  a:focus-visible, summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  mark { background: var(--mark-bg); color: var(--mark-text); padding: 0 .2em; }
+  code { font-family: ui-monospace, "Cascadia Mono", "Roboto Mono", monospace; font-size: .92em; overflow-wrap: anywhere; }
+  .summary, .notice {
+    background: var(--surface);
+    border-left: 4px solid var(--border);
+    padding: 1rem 1.25rem;
+    margin: 0 0 1.5rem;
+  }
+  .notice { border-left-color: var(--focus); }
+  .summary ul { margin: 0; padding-left: 1.25rem; }
+  nav ol { padding-left: 1.5rem; columns: 2 16rem; column-gap: 2rem; }
+  nav li { break-inside: avoid; }
+  .table-wrap { overflow-x: auto; margin: 0 0 1rem; }
+  table { border-collapse: collapse; width: 100%; min-width: 32rem; font-size: .975rem; }
+  caption { text-align: left; font-weight: 600; padding-bottom: .5rem; }
+  th, td { border: 1px solid var(--border); padding: .5rem .65rem; text-align: left; vertical-align: top; }
+  thead th { background: var(--surface); }
+  tbody th { font-weight: 600; }
+  footer { color: var(--muted); padding-top: 1rem; padding-bottom: 3rem; border-top: 1px solid var(--border); margin-top: 2.5rem; }
+  @media print {
+    .skip, nav { display: none; }
+    body { font-size: 11pt; }
+    a::after { content: " (" attr(href) ")"; font-size: .85em; }
+    a[href^="#"]::after { content: ""; }
+    .table-wrap { overflow: visible; }
+    table { min-width: 0; }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#conteudo">Ir para o conteúdo</a>
+
+<header>
+  <h1>Política de privacidade do Meu Santinho</h1>
+  <p class="meta">Versão 1. Última atualização: <time datetime="2026-10-04">4 de outubro de 2026</time>.</p>
+</header>
+
+<main id="conteudo">
+  <p>Esta política explica quais dados o aplicativo Meu Santinho (Android) trata, onde eles ficam e
+  quais são os seus direitos pela Lei Geral de Proteção de Dados Pessoais (LGPD, Lei 13.709/2018). O
+  mesmo texto aparece dentro do app, em Sobre &gt; Política de privacidade.</p>
+
+  <aside class="notice" aria-label="Aviso para quem publica esta página">
+    <p><strong>Antes de publicar</strong>, troque todos os campos marcados
+    <mark>[PREENCHER: ...]</mark>. O e-mail tem de ser o mesmo da propriedade
+    <code>meuSantinho.contactEmail</code> (gradle.properties) e do contato da ficha no Google Play.
+    Apague este aviso depois. Veja <code>docs/PUBLICACAO.md</code>.</p>
+  </aside>
+
+  <section class="summary" aria-labelledby="resumo">
+    <h2 id="resumo">Resumo</h2>
+    <ul>
+      <li><strong>O desenvolvedor não coleta, não recebe e não compartilha dados pessoais.</strong> O
+      app não tem conta, servidor próprio, anúncios, analytics, rastreamento nem SDKs de terceiros.</li>
+      <li><strong>Suas escolhas de candidatos ficam só no seu aparelho</strong>, cifradas e fora do
+      backup na nuvem. Ninguém além de você tem acesso a elas, nem o desenvolvedor.</li>
+      <li><strong>Para mostrar as candidaturas, o app consulta diretamente os sistemas públicos do
+      Tribunal Superior Eleitoral (TSE).</strong> Como em qualquer acesso ao site do TSE, o TSE e os
+      provedores de infraestrutura que ele usa recebem o endereço IP do aparelho e o que foi
+      consultado (por exemplo, a UF ou o município e o cargo). Suas escolhas nunca são enviadas.</li>
+      <li>O Meu Santinho é independente: <strong>não tem vínculo</strong> com o TSE, a Justiça
+      Eleitoral, órgãos de governo, partidos ou candidatos.</li>
+    </ul>
+  </section>
+
+  <nav aria-labelledby="sumario">
+    <h2 id="sumario">Sumário</h2>
+    <ol>
+      <li><a href="#responsavel">Quem é o responsável</a></li>
+      <li><a href="#no-aparelho">Dados tratados no seu aparelho</a></li>
+      <li><a href="#tse">O que sai do aparelho: consultas ao TSE</a></li>
+      <li><a href="#nao-faz">O que o app não faz</a></li>
+      <li><a href="#permissoes">Permissões do Android</a></li>
+      <li><a href="#bases-legais">Bases legais (LGPD)</a></li>
+      <li><a href="#direitos">Seus direitos</a></li>
+      <li><a href="#retencao">Por quanto tempo os dados ficam guardados</a></li>
+      <li><a href="#criancas">Crianças e adolescentes</a></li>
+      <li><a href="#seguranca">Segurança</a></li>
+      <li><a href="#terceiros">Serviços de terceiros</a></li>
+      <li><a href="#mudancas">Mudanças nesta política</a></li>
+      <li><a href="#contato">Contato</a></li>
+    </ol>
+  </nav>
+
+  <section aria-labelledby="responsavel">
+    <h2 id="responsavel">1. Quem é o responsável</h2>
+    <div class="table-wrap">
+      <table>
+        <caption>Responsável e contato</caption>
+        <tbody>
+          <tr><th scope="row">Responsável pelo app (desenvolvedor)</th><td><mark>[PREENCHER: nome completo da pessoa ou razão social]</mark></td></tr>
+          <tr><th scope="row">Contato para privacidade e para exercer seus direitos</th><td><mark>[PREENCHER: e-mail de contato]</mark></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>O desenvolvedor é o controlador apenas dos dados que você mesmo enviar a ele, por exemplo ao
+    escrever para o e-mail acima. Como agente de tratamento de pequeno porte, o desenvolvedor não
+    indicou encarregado; o canal de comunicação com titulares e com a Autoridade Nacional de Proteção
+    de Dados (ANPD) é esse e-mail (LGPD, art. 41; Resolução CD/ANPD nº 2/2022, art. 11).</p>
+  </section>
+
+  <section aria-labelledby="no-aparelho">
+    <h2 id="no-aparelho">2. Dados tratados no seu aparelho</h2>
+    <p>Estes dados são criados por você, ficam só no armazenamento privado do app e não são enviados
+    ao desenvolvedor nem a ninguém.</p>
+    <div class="table-wrap">
+      <table>
+        <caption>Dados guardados no aparelho</caption>
+        <thead><tr><th scope="col">Dado</th><th scope="col">Para quê</th><th scope="col">Onde fica e como é protegido</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Suas escolhas de candidatos (o "santinho")</th><td>Montar a cola na ordem da urna</td><td>Arquivo cifrado com AES-256-GCM; a chave fica no Android Keystore e não pode ser exportada. Fora do backup e da transferência entre aparelhos.</td></tr>
+          <tr><th scope="row">Local de votação (UF e, se for o caso, município)</th><td>Buscar as candidaturas do seu local</td><td>Preferências do app, fora do backup. O código do local vai ao TSE em cada consulta (<a href="#tse">seção 3</a>).</td></tr>
+          <tr><th scope="row">Preferências (aviso inicial aceito, lembrete, bloqueio do app, proteção de tela)</th><td>Funcionamento do app</td><td>Preferências do app, fora do backup.</td></tr>
+          <tr><th scope="row">Cópia dos dados públicos do TSE (candidaturas e fotos)</th><td>Uso sem internet</td><td>Cache do app. Pode ser apagado a qualquer momento (<a href="#retencao">seção 8</a>).</td></tr>
+          <tr><th scope="row">Cola em PDF ou em imagem</th><td>Imprimir ou compartilhar</td><td>Criada só quando você pede. A imagem é um arquivo temporário apagado na próxima abertura do app; o PDF vai para o destino que você escolher no diálogo de impressão.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Opinião política é dado pessoal sensível (LGPD, art. 5º, II). Por isso as escolhas nunca
+    aparecem em notificações, registros (logs), backups ou na área de transferência, e nunca saem do
+    aparelho, a não ser que você mesmo imprima ou compartilhe a cola.</p>
+  </section>
+
+  <section aria-labelledby="tse">
+    <h2 id="tse">3. O que sai do aparelho: consultas ao TSE</h2>
+    <p>O app só se conecta a servidores do TSE, no domínio <code>tse.jus.br</code>: o sistema
+    DivulgaCandContas (<code>divulgacandcontas.tse.jus.br</code>) e, quando ele não responde, os
+    arquivos de dados abertos do TSE (<code>cdn.tse.jus.br</code>). Não há servidor do desenvolvedor
+    no caminho.</p>
+    <p>Em cada consulta, o TSE e os provedores de infraestrutura que ele usa (por exemplo, a rede de
+    distribuição de conteúdo do site) recebem:</p>
+    <ul>
+      <li>o <strong>endereço IP</strong> do aparelho, como em qualquer conexão à internet;</li>
+      <li><strong>o que foi consultado</strong>: a eleição, a UF ou o código do município, o cargo e,
+      quando você abre uma candidatura ou a foto dela, o identificador dessa candidatura. Assim, o TSE
+      pode saber quais candidaturas foram consultadas a partir do seu IP, como aconteceria no site
+      oficial;</li>
+      <li>a <strong>versão do app e a versão do Android</strong>, no cabeçalho
+      <code>User-Agent</code>, que também traz o endereço desta política.</li>
+    </ul>
+    <p>O app <strong>não envia</strong> suas escolhas, seu nome, seu título de eleitor, sua
+    localização (o app não pede permissão de localização) nem identificadores do aparelho (como o ID
+    de publicidade).</p>
+    <p>O TSE trata esses dados de acesso como controlador dos próprios sistemas, conforme as regras da
+    LGPD para o poder público e a política de privacidade publicada no portal do TSE
+    (<a href="https://www.tse.jus.br">www.tse.jus.br</a>). O desenvolvedor não tem acesso a eles.</p>
+  </section>
+
+  <section aria-labelledby="nao-faz">
+    <h2 id="nao-faz">4. O que o app não faz</h2>
+    <ul>
+      <li>Não tem conta, login ou cadastro.</li>
+      <li>Não exibe anúncios e não usa o ID de publicidade.</li>
+      <li>Não usa analytics, SDK de relatório de falhas nem rastreamento de qualquer tipo.</li>
+      <li>Não vende, não aluga e não compartilha dados.</li>
+      <li>Não recomenda, não destaca e não ordena candidatos por popularidade, e não junta as escolhas
+      de ninguém (não há enquete, ranking nem "mais buscados").</li>
+      <li>Não abre páginas dentro do app: os links para o site do TSE abrem no seu navegador.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="permissoes">
+    <h2 id="permissoes">5. Permissões do Android</h2>
+    <div class="table-wrap">
+      <table>
+        <caption>Permissões pedidas pelo app e motivo</caption>
+        <thead><tr><th scope="col">Permissão</th><th scope="col">Por quê</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Internet (<code>INTERNET</code>) e estado da rede (<code>ACCESS_NETWORK_STATE</code>)</th><td>Consultar o TSE e saber se há conexão.</td></tr>
+          <tr><th scope="row">Notificações (<code>POST_NOTIFICATIONS</code>, Android 13 ou mais novo)</th><td>Só se você ligar o lembrete do dia da eleição. O texto da notificação é genérico e nunca cita candidatos ou números.</td></tr>
+          <tr><th scope="row">Biometria (<code>USE_BIOMETRIC</code>, <code>USE_FINGERPRINT</code>)</th><td>Só se você ligar o bloqueio do app. Quem confere a digital, o rosto ou a senha é o Android; o app nunca recebe dados biométricos.</td></tr>
+          <tr><th scope="row">Inicialização e ativação (<code>RECEIVE_BOOT_COMPLETED</code>, <code>WAKE_LOCK</code>)</th><td>Usadas pelo agendador do Android (WorkManager) para manter o lembrete agendado depois que o aparelho reinicia.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="bases-legais">
+    <h2 id="bases-legais">6. Bases legais (LGPD)</h2>
+    <div class="table-wrap">
+      <table>
+        <caption>Tratamentos e bases legais</caption>
+        <thead><tr><th scope="col">Tratamento</th><th scope="col">Base legal</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Escolhas, local de votação e preferências guardados no seu aparelho</th><td>Tratamento feito por você, no seu aparelho, para fins particulares (LGPD, art. 4º, I). O desenvolvedor não tem acesso a esses dados.</td></tr>
+          <tr><th scope="row">Consultas ao TSE (IP e parâmetros da consulta)</th><td>Feitas a seu pedido, para obter informação pública. O tratamento dos dados de acesso é do TSE, como controlador dos próprios sistemas (<a href="#tse">seção 3</a>).</td></tr>
+          <tr><th scope="row">Exibição dos dados públicos de candidaturas</th><td>Dados de acesso público publicados pelo TSE para informar os eleitores, usados para a mesma finalidade, sem alteração e sem dados pessoais desnecessários, como CPF, título de eleitor, data de nascimento ou e-mail dos candidatos (LGPD, art. 7º, §§ 3º e 7º).</td></tr>
+          <tr><th scope="row">Mensagens que você enviar ao desenvolvedor</th><td>Legítimo interesse, para responder (art. 7º, IX), e cumprimento de obrigação legal quando o pedido for sobre os seus direitos (art. 7º, II).</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="direitos">
+    <h2 id="direitos">7. Seus direitos</h2>
+    <p>A LGPD (art. 18) garante: confirmação da existência de tratamento; acesso aos dados; correção de
+    dados incompletos, inexatos ou desatualizados; anonimização, bloqueio ou eliminação de dados
+    desnecessários, excessivos ou tratados em desconformidade com a lei; portabilidade; eliminação dos
+    dados tratados com consentimento; informação sobre com quem os dados foram compartilhados;
+    informação sobre a possibilidade de não dar consentimento e suas consequências; e revogação do
+    consentimento.</p>
+    <p>Como os dados do app ficam no seu aparelho, você exerce a maior parte desses direitos no
+    próprio app:</p>
+    <ul>
+      <li><strong>ver e corrigir</strong>: na tela Meu santinho, onde você troca ou remove cada escolha;</li>
+      <li><strong>apagar</strong>: em Configurações &gt; Apagar meus dados (apaga as escolhas, a chave
+      de cifra, o local, as preferências e o cache), ou desinstalando o app;</li>
+      <li><strong>levar com você</strong>: imprimindo a cola, salvando em PDF ou compartilhando a imagem.</li>
+    </ul>
+    <p>Para os dados que você enviou ao desenvolvedor por e-mail, escreva para o contato da
+    <a href="#responsavel">seção 1</a>. A resposta sai em até 15 dias (LGPD, art. 19, II). Para os
+    dados de acesso guardados pelo TSE, use os canais de privacidade do TSE. Você também pode reclamar
+    à ANPD: <a href="https://www.gov.br/anpd">www.gov.br/anpd</a>.</p>
+  </section>
+
+  <section aria-labelledby="retencao">
+    <h2 id="retencao">8. Por quanto tempo os dados ficam guardados</h2>
+    <div class="table-wrap">
+      <table>
+        <caption>Prazos de guarda</caption>
+        <thead><tr><th scope="col">Dado</th><th scope="col">Prazo</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Escolhas</th><td>Até você trocar, remover ou apagar, ou desinstalar o app. Se a chave do Android Keystore deixar de valer (por exemplo, numa restauração do sistema), as escolhas ficam ilegíveis e são descartadas.</td></tr>
+          <tr><th scope="row">Local e preferências</th><td>Até você mudar ou apagar, ou desinstalar o app.</td></tr>
+          <tr><th scope="row">Cache dos dados públicos</th><td>Atualizado de tempos em tempos. Dados de eleições antigas que você não abre há 60 dias são apagados automaticamente; Configurações &gt; Limpar dados baixados apaga tudo.</td></tr>
+          <tr><th scope="row">Imagem da cola compartilhada</th><td>Apagada na próxima abertura do app. As cópias enviadas a outros apps ficam sob o controle desses apps.</td></tr>
+          <tr><th scope="row">Mensagens enviadas ao desenvolvedor</th><td>Pelo tempo necessário para responder e até 12 meses depois, salvo obrigação legal ou defesa de direitos.</td></tr>
+          <tr><th scope="row">Dados de acesso no TSE</th><td>Pelo prazo definido pelo TSE.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="criancas">
+    <h2 id="criancas">9. Crianças e adolescentes</h2>
+    <p>O app é feito para eleitores e não é direcionado a crianças. Ele não coleta dados de ninguém,
+    inclusive de crianças e adolescentes. O voto é facultativo para quem tem 16 ou 17 anos
+    (Constituição, art. 14, § 1º, II, "c"), e esses eleitores podem usar o app da mesma forma.</p>
+  </section>
+
+  <section aria-labelledby="seguranca">
+    <h2 id="seguranca">10. Segurança</h2>
+    <ul>
+      <li>Escolhas cifradas com AES-256-GCM, com chave gerada e guardada no Android Keystore, que não
+      pode ser exportada.</li>
+      <li>Backup na nuvem e transferência entre aparelhos desligados para todos os dados do app.</li>
+      <li>Conexões só por HTTPS, confiando apenas nas autoridades certificadoras do sistema, e só com
+      servidores do TSE.</li>
+      <li>Nenhum registro (log) com escolhas ou com respostas do TSE.</li>
+      <li>Telas com escolhas protegidas contra captura de tela e contra a prévia na lista de apps
+      recentes (opção ligada por padrão).</li>
+      <li>Bloqueio opcional do app com biometria ou com o bloqueio de tela do aparelho.</li>
+    </ul>
+    <p>Nenhuma medida elimina todos os riscos. Quem tiver acesso ao seu aparelho desbloqueado pode ver
+    as escolhas: use o bloqueio do app e compartilhe a imagem da cola só com quem você confia. A cola
+    em papel também mostra seus votos; guarde-a com cuidado.</p>
+  </section>
+
+  <section aria-labelledby="terceiros">
+    <h2 id="terceiros">11. Serviços de terceiros que você pode usar junto com o app</h2>
+    <ul>
+      <li><strong>Google Play</strong>: a instalação e as atualizações passam pelo Google Play, que
+      trata dados conforme a política de privacidade do Google. Se você permitir o envio de
+      diagnósticos ao Google, o desenvolvedor pode ver no Play Console estatísticas agregadas e
+      relatórios de falhas que não identificam você e não contêm suas escolhas.</li>
+      <li><strong>Impressão e compartilhamento</strong>: ao imprimir, salvar em PDF ou compartilhar a
+      cola, o conteúdo vai para o serviço de impressão ou o app que você escolher, sob as regras desse
+      serviço.</li>
+      <li><strong>Navegador</strong>: os links para o site do TSE abrem no navegador do aparelho.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="mudancas">
+    <h2 id="mudancas">12. Mudanças nesta política</h2>
+    <p>Se esta política mudar, a nova versão será publicada neste mesmo endereço, com nova data e
+    número de versão, e o texto dentro do app será atualizado na versão seguinte do app. Mudanças que
+    alterem o tratamento de dados (por exemplo, uma nova conexão de rede) serão descritas nas
+    novidades da atualização no Google Play antes de valerem.</p>
+  </section>
+
+  <section aria-labelledby="contato">
+    <h2 id="contato">13. Contato</h2>
+    <p>Dúvidas, pedidos e reclamações: <mark>[PREENCHER: e-mail de contato]</mark>.</p>
+  </section>
+</main>
+
+<footer>
+  <p>Fonte dos dados de candidaturas: Tribunal Superior Eleitoral (TSE), dados públicos, licença CC BY.
+  O Meu Santinho é um aplicativo independente, sem vínculo com o TSE ou com a Justiça Eleitoral.</p>
+</footer>
+</body>
+</html>

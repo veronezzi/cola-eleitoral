@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Lembrete opcional do dia da eleição (work/). Textos genéricos de propósito: a notificação
+    nunca cita candidatos, números ou escolhas, porque aparece na tela de bloqueio.
+-->
+<resources>
+    <string name="reminder_channel_name">Lembretes da eleição</string>
+    <string name="reminder_channel_description">Aviso na manhã do dia da eleição, se você ligar o lembrete. Nunca mostra candidatos nem as suas escolhas.</string>
+    <string name="reminder_title_first_round">Hoje é dia de votar (1º turno)</string>
+    <string name="reminder_title_second_round">Hoje é dia de votar (2º turno)</string>
+    <string name="reminder_text">Leve sua cola em papel: o celular não entra na cabine.</string>
+</resources>

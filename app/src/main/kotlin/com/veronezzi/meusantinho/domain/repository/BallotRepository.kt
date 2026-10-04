@@ -5,12 +5,24 @@ import com.veronezzi.meusantinho.domain.model.BallotSlotKey
 import com.veronezzi.meusantinho.domain.model.Round
 import com.veronezzi.meusantinho.domain.model.SavePickResult
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 
 /**
  * The user's picks, encrypted on the device (AES-GCM key in AndroidKeyStore, file excluded from
  * backup). Implementations must never log pick contents.
  */
 interface BallotRepository {
+    /**
+     * True after saved picks could not be decrypted (Keystore key invalidated, file corrupted)
+     * and were discarded so the app keeps working. The UI shows a one-time notice ("Não foi
+     * possível ler as escolhas salvas neste aparelho; elas foram apagadas por segurança.") and
+     * then calls [acknowledgePicksLost]. Survives restarts until acknowledged.
+     */
+    fun observePicksLost(): Flow<Boolean> = flowOf(false)
+
+    /** Clears the [observePicksLost] flag once the user has seen the notice. */
+    suspend fun acknowledgePicksLost() {}
+
     /** Picks of one election round, in urna order then slot. */
     fun observeBallot(electionId: Long, round: Round): Flow<List<BallotPick>>
 

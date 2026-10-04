@@ -2,5 +2,8 @@
 <resources>
     <!-- Cinza-azulado neutro, sem associação partidária. Provisório até a identidade visual final. -->
     <color name="brand_neutral">#FF37474F</color>
-    <color name="brand_on_neutral">#FFFFFFFF</color>
+
+    <!-- Fundo da janela antes do primeiro quadro do Compose: iguais à superfície do tema. -->
+    <color name="window_background">#FFF8F9FB</color>
+    <color name="window_background_dark">#FF111416</color>
 </resources>

@@ -2,4 +2,361 @@
 <!-- Idioma padrão do app: português do Brasil. -->
 <resources xmlns:tools="http://schemas.android.com/tools" tools:locale="pt-rBR">
     <string name="app_name">Meu Santinho</string>
+
+    <!-- Ações comuns -->
+    <string name="action_back">Voltar</string>
+    <string name="action_cancel">Cancelar</string>
+    <string name="action_close">Fechar</string>
+    <string name="action_continue">Continuar</string>
+    <string name="action_not_now">Agora não</string>
+    <string name="action_ok">Entendi</string>
+    <string name="action_open_android_settings">Abrir configurações</string>
+    <string name="action_open_tse_site">Abrir site do TSE</string>
+    <string name="action_retry">Tentar de novo</string>
+    <string name="action_undo">Desfazer</string>
+
+    <!-- Navegação de primeiro nível -->
+    <string name="nav_home">Início</string>
+    <string name="nav_ballot">Meu santinho</string>
+    <string name="nav_about">Sobre</string>
+
+    <string name="round_first">1º turno</string>
+    <string name="round_second">2º turno</string>
+
+    <!-- Primeira execução: aviso de independência (política de informação de governo do Google Play) -->
+    <string name="onboarding_title">Antes de começar</string>
+    <string name="onboarding_independent">O Meu Santinho é um aplicativo independente. Não somos o TSE nem órgão do governo: o app não tem vínculo com o Tribunal Superior Eleitoral (TSE), com a Justiça Eleitoral, com nenhum órgão de governo, partido ou candidato.</string>
+    <string name="onboarding_source">As informações de candidaturas são públicas e vêm do sistema DivulgaCandContas do TSE (divulgacandcontas.tse.jus.br). Confira sempre no site oficial.</string>
+    <string name="onboarding_open_source_site">Abrir divulgacandcontas.tse.jus.br</string>
+    <string name="onboarding_privacy">Suas escolhas ficam só neste aparelho, cifradas. Não há conta, anúncio nem rastreamento.</string>
+    <string name="onboarding_booth">O celular não entra na cabine de votação. O app ajuda você a montar uma cola em papel para levar no dia.</string>
+    <string name="onboarding_accept">Entendi</string>
+
+    <!-- Local de votação -->
+    <string name="location_title">Onde você vota</string>
+    <string name="location_uf_intro">Escolha a unidade da federação do seu título de eleitor. Ela define os cargos da sua cédula.</string>
+    <string name="location_abroad">Exterior</string>
+    <string name="location_abroad_supporting">Quem vota no exterior vota só para Presidente</string>
+    <string name="location_abroad_short">Exterior</string>
+    <string name="location_current">Local atual</string>
+    <string name="location_municipality_label">%1$s (%2$s)</string>
+    <string name="location_municipality_optional">Escolha seu município em %1$s. É opcional agora e necessário nas eleições municipais.</string>
+    <string name="location_municipality_required">Escolha seu município em %1$s. Ele é necessário para montar a cédula desta eleição municipal.</string>
+    <string name="location_search_label">Buscar município</string>
+    <string name="location_skip_municipality">Pular por enquanto</string>
+    <string name="location_loading">Carregando os municípios</string>
+    <string name="location_no_match_title">Nenhum município encontrado</string>
+    <string name="location_no_match_message">Confira a grafia ou apague a busca para ver a lista toda.</string>
+
+    <!-- Início -->
+    <string name="home_loading">Carregando a eleição</string>
+    <string name="home_loading_ballot">Carregando os cargos da sua cédula</string>
+    <string name="home_round_and_date">%1$s: %2$s</string>
+    <plurals name="home_days_left">
+        <item quantity="one">Falta %d dia</item>
+        <item quantity="many">Faltam %d dias</item>
+        <item quantity="other">Faltam %d dias</item>
+    </plurals>
+    <string name="home_voting_day">Hoje é dia de votar: das 8h às 17h, horário de Brasília.</string>
+    <string name="home_round_over">Esta votação já aconteceu.</string>
+    <string name="home_date_unknown">Data não informada pelo TSE.</string>
+    <string name="home_you_vote_in">Você vota em: %1$s</string>
+    <string name="home_change_election">Trocar eleição</string>
+    <string name="home_change_location">Alterar local</string>
+    <string name="home_ballot_title">Sua cédula, na ordem da urna</string>
+    <string name="home_choose">Escolher</string>
+    <string name="home_change_pick">Trocar</string>
+    <string name="home_no_pick">Sem escolha</string>
+    <string name="home_see_ballot">Ver meu santinho</string>
+    <string name="home_no_runoff_title">Não há 2º turno para o seu local</string>
+    <string name="home_no_runoff_message">O TSE não marcou candidatos do 2º turno nas unidades em que você vota. Se isso mudar, eles aparecem aqui.</string>
+    <string name="home_see_first_round">Ver cédula do 1º turno</string>
+    <string name="home_no_location_title">Escolha onde você vota</string>
+    <string name="home_no_location_message">Com a UF (e, nas eleições municipais, o município), o app monta a sua cédula.</string>
+    <string name="home_needs_municipality_title">Escolha seu município</string>
+    <string name="home_needs_municipality_message">Nas eleições municipais, a cédula depende do município do seu título.</string>
+    <string name="home_no_municipal_df_title">O Distrito Federal não tem eleições municipais</string>
+    <string name="home_no_municipal_df_message">No DF não há eleição para prefeito nem para vereador.</string>
+    <string name="home_no_municipal_abroad_title">Sem votação municipal no exterior</string>
+    <string name="home_no_municipal_abroad_message">Quem vota no exterior vota só para Presidente, nas eleições gerais.</string>
+    <string name="home_reminder_title">Lembrete no dia da eleição</string>
+    <string name="home_reminder_message">Receba um aviso às 7h do dia da votação. Ele nunca mostra suas escolhas.</string>
+    <string name="home_reminder_action">Ligar lembrete</string>
+    <string name="home_booth_notice">Na cabine, leve a cola em papel. Celular, câmera e relógio inteligente não entram, nem desligados (Lei 9.504/97, art. 91-A; Res. TSE 23.751/2026).</string>
+
+    <!-- Cédula: votos, dígitos e escolhas -->
+    <string name="ballot_slot_label">%1$s: %2$dª vaga</string>
+    <string name="ballot_slot_first">primeira vaga</string>
+    <string name="ballot_slot_second">segunda vaga</string>
+    <string name="ballot_slot_spoken">%1$s, %2$s</string>
+    <string name="ballot_vote_label">%1$d. %2$s</string>
+    <string name="pick_name_and_party">%1$s · %2$s</string>
+    <plurals name="digit_count">
+        <item quantity="one">%d dígito</item>
+        <item quantity="many">%d dígitos</item>
+        <item quantity="other">%d dígitos</item>
+    </plurals>
+    <plurals name="digit_boxes_empty">
+        <item quantity="one">%d dígito, sem escolha</item>
+        <item quantity="many">%d dígitos, sem escolha</item>
+        <item quantity="other">%d dígitos, sem escolha</item>
+    </plurals>
+
+    <!-- Meu santinho -->
+    <string name="ballot_title">Meu santinho</string>
+    <string name="ballot_loading">Carregando suas escolhas</string>
+    <string name="ballot_privacy_note">Suas escolhas ficam só neste aparelho.</string>
+    <string name="ballot_read_only">A data deste turno já passou: as escolhas ficam só para consulta.</string>
+    <string name="ballot_entry_spoken">%1$s: %2$s, %3$s, %4$s</string>
+    <string name="ballot_entry_empty_spoken">%1$s: sem escolha, %2$d dígitos</string>
+    <string name="ballot_status_changed">Situação atualizada no TSE: %1$s</string>
+    <string name="ballot_other_place">Escolha feita para outro local (%1$s)</string>
+    <string name="ballot_see_detail">Detalhes</string>
+    <string name="ballot_remove">Remover</string>
+    <string name="ballot_removed">Escolha removida.</string>
+    <string name="ballot_cleared">Escolhas apagadas.</string>
+    <string name="ballot_outside_title">Escolhas de outro local</string>
+    <string name="ballot_export">Imprimir ou compartilhar a cola</string>
+    <string name="ballot_clear">Limpar escolhas</string>
+    <string name="ballot_clear_title">Limpar escolhas?</string>
+    <string name="ballot_clear_message">Todas as escolhas deste turno serão apagadas deste aparelho.</string>
+    <string name="ballot_clear_confirm">Limpar</string>
+
+    <!-- Lista de candidatos -->
+    <string name="list_search_label">Nome, número ou partido</string>
+    <string name="list_search_clear">Limpar busca</string>
+    <string name="list_filters">Filtros</string>
+    <plurals name="list_filters_active">
+        <item quantity="one">Filtros, %d ativo</item>
+        <item quantity="many">Filtros, %d ativos</item>
+        <item quantity="other">Filtros, %d ativos</item>
+    </plurals>
+    <string name="list_filters_and_order">Filtros e ordem</string>
+    <string name="list_sorted_by">Ordem: %1$s</string>
+    <plurals name="list_showing">
+        <item quantity="one">Mostrando %1$s de %2$s candidatura</item>
+        <item quantity="many">Mostrando %1$s de %2$s candidaturas</item>
+        <item quantity="other">Mostrando %1$s de %2$s candidaturas</item>
+    </plurals>
+    <string name="list_loading">Carregando candidatos</string>
+    <string name="list_empty_tse_title">Nenhum candidato listado</string>
+    <string name="list_empty_tse_message">O TSE não lista candidatos para este cargo neste local.</string>
+    <string name="list_empty_filters_title">Nenhum candidato com esses filtros</string>
+    <string name="list_empty_filters_message">Mude a busca ou limpe os filtros para ver todas as candidaturas.</string>
+    <string name="list_empty_runoff_message">O TSE ainda não marcou candidatos do 2º turno para este cargo. Desligue “Só candidatos do 2º turno” nos filtros para ver todas as candidaturas.</string>
+    <string name="list_clear_filters">Limpar filtros</string>
+    <string name="list_open_detail">Ver detalhes</string>
+    <string name="list_saved_here">No seu santinho</string>
+    <string name="list_saved_other_slot">No seu santinho, no outro voto</string>
+    <string name="list_detail_placeholder_title">Escolha um candidato</string>
+    <string name="list_detail_placeholder_message">Toque em um nome da lista para ver os detalhes aqui.</string>
+    <string name="candidate_number_spoken">Número %1$s</string>
+    <string name="candidate_photo_description">Foto de %1$s</string>
+    <string name="status_not_informed">Situação não informada pelo TSE</string>
+    <string name="status_spoken">Situação no TSE: %1$s</string>
+    <string name="sort_by_number">Número</string>
+    <string name="sort_by_name">Nome</string>
+    <string name="sort_by_party">Partido</string>
+
+    <!-- Filtros -->
+    <string name="filters_office">Cargo</string>
+    <string name="filters_party">Partido</string>
+    <string name="filters_status">Situação no TSE</string>
+    <string name="filters_only_second_round">Só candidatos do 2º turno</string>
+    <string name="filters_order">Ordem</string>
+    <string name="filters_neutrality_note">O app não classifica nem recomenda candidatos: a ordem padrão é pelo número.</string>
+    <plurals name="filters_show_results">
+        <item quantity="one">Ver %d resultado</item>
+        <item quantity="many">Ver %d resultados</item>
+        <item quantity="other">Ver %d resultados</item>
+    </plurals>
+
+    <!-- Detalhe do candidato -->
+    <string name="detail_loading">Carregando o candidato</string>
+    <string name="detail_office_and_unit">%1$s · %2$s</string>
+    <string name="detail_number_label">Número na urna</string>
+    <string name="detail_save">Salvar no meu santinho</string>
+    <string name="detail_remove">Remover do meu santinho</string>
+    <string name="detail_saved_state">No seu santinho: %1$s</string>
+    <string name="detail_in_other_slot">Este candidato já está no seu santinho, no outro voto para %1$s (%2$dª vaga).</string>
+    <string name="detail_open_tse_page">Ver no site do TSE</string>
+    <string name="detail_partial_title">Alguns dados não carregaram</string>
+    <string name="detail_party_section">Partido e coligação</string>
+    <string name="detail_party">Partido</string>
+    <string name="detail_party_number">número %1$d</string>
+    <string name="detail_coalition">Coligação ou federação</string>
+    <string name="detail_coalition_composition">Composição</string>
+    <string name="detail_status_section">Situação no TSE</string>
+    <string name="detail_registration">Registro:</string>
+    <string name="detail_on_ballot">Na urna</string>
+    <string name="detail_totalization">Totalização</string>
+    <string name="detail_running_mates">Vice ou suplentes</string>
+    <string name="detail_last_update">Atualizado pelo TSE em %1$s (horário de Brasília)</string>
+    <string name="detail_replace_title">Trocar escolha?</string>
+    <string name="detail_replace_message">Trocar %1$s por %2$s em %3$s?</string>
+    <string name="detail_replace_confirm">Trocar</string>
+    <string name="detail_saved">Salvo no seu santinho: %1$s.</string>
+    <string name="detail_saved_with_notice">Salvo no seu santinho: %1$s. Situação no TSE: %2$s. Confira no site oficial antes de votar.</string>
+    <string name="detail_saved_action">Ver</string>
+    <string name="detail_removed">Removido do seu santinho.</string>
+    <string name="detail_duplicate">Esse candidato já está no outro voto para %1$s. Na urna, o segundo voto repetido é anulado.</string>
+    <string name="detail_save_failed">Não foi possível salvar. Tente de novo.</string>
+    <string name="detail_round_closed_title">Turno encerrado</string>
+    <string name="detail_round_closed_message">A data deste turno já passou; não é mais possível mudar as escolhas.</string>
+
+    <!-- Cola: PDF e imagem -->
+    <string name="cola_screen_title">Cola para imprimir</string>
+    <string name="cola_intro">Imprima a cola ou salve em PDF para levar no dia. Na cabine, só papel: o celular não entra.</string>
+    <string name="cola_title">Minha cola: %1$s, %2$s, %3$s</string>
+    <string name="cola_untitled_election">Eleição</string>
+    <string name="cola_footer_booth">Na cabine não é permitido levar celular (Lei 9.504/97, art. 91-A). Confira o nome e a foto na urna antes de confirmar.</string>
+    <string name="cola_footer_source">Feito com o app Meu Santinho, independente e sem vínculo com o TSE. Fonte dos dados: TSE.</string>
+    <string name="cola_preview_description">Prévia da cola. %1$s. %2$s</string>
+    <string name="cola_show_names">Mostrar nomes e partidos</string>
+    <string name="cola_show_names_hint">Desligue para levar só os números.</string>
+    <string name="cola_print">Imprimir ou salvar PDF</string>
+    <string name="cola_print_job">Minha cola</string>
+    <string name="cola_share">Compartilhar imagem</string>
+    <string name="cola_share_chooser">Compartilhar a cola</string>
+    <string name="cola_share_warning_title">Compartilhar suas escolhas?</string>
+    <string name="cola_share_warning_message">A imagem mostra em quem você pretende votar. Compartilhe só com quem você confia.</string>
+    <string name="cola_share_confirm">Compartilhar</string>
+    <string name="cola_share_failed">Nenhum app disponível para receber a imagem.</string>
+    <string name="cola_booth_hint">Dica: as caixas vazias podem ser preenchidas à mão.</string>
+
+    <!-- Lembrete: opt-in e permissão de notificações -->
+    <string name="optin_reminder_title">Lembrete no dia da eleição</string>
+    <string name="optin_reminder_rationale">Às 7h do dia da votação (horário de Brasília), o app mostra uma notificação para lembrar você de levar a cola em papel. A notificação não mostra nomes nem números. No Android 13 ou mais recente, o sistema vai pedir permissão para enviar notificações.</string>
+    <string name="optin_blocked_title">Notificações desligadas</string>
+    <string name="optin_blocked_message">Sem permissão para notificações, o lembrete não aparece. Você pode permitir nas configurações do Android.</string>
+
+    <!-- Bloqueio opcional do app -->
+    <string name="lock_title">Meu Santinho está bloqueado</string>
+    <string name="lock_message">Desbloqueie com a biometria ou com o bloqueio de tela do aparelho.</string>
+    <string name="lock_failed">Não foi possível desbloquear. Tente de novo.</string>
+    <string name="lock_unlock">Desbloquear</string>
+    <string name="lock_prompt_title">Desbloquear o Meu Santinho</string>
+    <string name="lock_prompt_subtitle">Use a biometria ou o bloqueio de tela do aparelho</string>
+    <string name="lock_enable_prompt_title">Confirme para ligar o bloqueio</string>
+
+    <!-- Configurações -->
+    <string name="settings_title">Configurações</string>
+    <string name="settings_section_place">Local de votação</string>
+    <string name="settings_location">Onde você vota</string>
+    <string name="settings_location_none">Não escolhido</string>
+    <string name="settings_section_reminder">Lembrete</string>
+    <string name="settings_reminder">Lembrete no dia da eleição</string>
+    <string name="settings_reminder_description">Notificação às 7h do dia da votação, sem mostrar suas escolhas.</string>
+    <string name="settings_section_privacy">Privacidade</string>
+    <string name="settings_app_lock">Bloquear o app</string>
+    <string name="settings_app_lock_description">Pede a biometria ou o bloqueio de tela ao abrir o app e ao voltar depois de 30 segundos.</string>
+    <string name="settings_secure_screens">Proteger telas com escolhas</string>
+    <string name="settings_secure_screens_description">Impede capturas de tela e esconde a prévia nos apps recentes.</string>
+    <string name="settings_lock_unavailable">Configure um bloqueio de tela no Android (PIN, padrão, senha ou biometria) para usar o bloqueio do app.</string>
+    <string name="settings_section_data">Dados</string>
+    <string name="settings_clear_downloads">Limpar dados baixados</string>
+    <string name="settings_clear_downloads_description">Apaga a cópia local dos dados públicos do TSE e as fotos. Suas escolhas continuam.</string>
+    <string name="settings_clear_downloads_confirm_message">Os dados do TSE serão baixados de novo quando você abrir as telas. Suas escolhas não são apagadas.</string>
+    <string name="settings_clear_downloads_confirm">Limpar</string>
+    <string name="settings_downloads_cleared">Dados baixados apagados.</string>
+    <string name="settings_delete_all">Apagar meus dados</string>
+    <string name="settings_delete_all_description">Apaga escolhas, preferências e dados baixados deste aparelho.</string>
+    <string name="settings_delete_all_confirm_message">Todas as suas escolhas, o local de votação, o lembrete e os dados baixados serão apagados. Não dá para desfazer.</string>
+    <string name="settings_delete_all_confirm">Apagar tudo</string>
+
+    <!-- Indicador de fonte e atualização -->
+    <string name="freshness_source_divulga">Fonte: TSE (DivulgaCandContas)</string>
+    <string name="freshness_source_open_data">Fonte: dados abertos do TSE</string>
+    <string name="freshness_updated">Atualizado %1$s (%2$s)</string>
+    <string name="freshness_just_now">agora mesmo</string>
+    <plurals name="freshness_minutes_ago">
+        <item quantity="one">há %d minuto</item>
+        <item quantity="many">há %d minutos</item>
+        <item quantity="other">há %d minutos</item>
+    </plurals>
+    <plurals name="freshness_hours_ago">
+        <item quantity="one">há %d hora</item>
+        <item quantity="many">há %d horas</item>
+        <item quantity="other">há %d horas</item>
+    </plurals>
+    <plurals name="freshness_days_ago">
+        <item quantity="one">há %d dia</item>
+        <item quantity="many">há %d dias</item>
+        <item quantity="other">há %d dias</item>
+    </plurals>
+    <string name="freshness_never">Ainda não baixado</string>
+    <string name="freshness_stale_title">Podem estar desatualizados</string>
+    <string name="stale_reason_network">Sem conexão. Mostrando os dados salvos neste aparelho.</string>
+    <string name="stale_reason_blocked">O site do TSE recusou a consulta desta rede.</string>
+    <string name="stale_reason_rate_limited">O TSE limitou as consultas por agora.</string>
+    <string name="stale_reason_not_found">O TSE não publicou esses dados.</string>
+    <string name="stale_reason_server">O sistema do TSE está instável.</string>
+    <string name="stale_reason_parsing">O TSE mudou o formato dos dados. Atualize o app.</string>
+    <string name="stale_reason_unknown">A última atualização falhou.</string>
+
+    <!-- Erros por tipo (ARCHITECTURE.md 2.6) -->
+    <string name="error_network_title">Sem conexão</string>
+    <string name="error_network_with_cache">Sem conexão. Mostrando os dados salvos neste aparelho.</string>
+    <string name="error_network_no_cache">Ainda não há dados salvos neste aparelho. Conecte-se à internet e tente de novo.</string>
+    <string name="error_blocked_title">O TSE recusou a consulta</string>
+    <string name="error_blocked_message">O site do TSE recusou a consulta desta rede. Isso acontece fora do Brasil, com VPN ou por proteção do TSE. Tente outra rede (Wi-Fi ou dados móveis) ou abra o site oficial.</string>
+    <string name="error_rate_limited_title">Muitas consultas</string>
+    <string name="error_rate_limited_message">O TSE limitou as consultas por agora. Tente de novo em alguns minutos.</string>
+    <string name="error_not_found_title">Dados não publicados</string>
+    <string name="error_not_found_message">O TSE ainda não publicou esses dados.</string>
+    <string name="error_not_found_candidate">O TSE não publicou os dados desta candidatura.</string>
+    <string name="error_server_title">TSE instável</string>
+    <string name="error_server_message">O sistema do TSE está instável. Tente mais tarde.</string>
+    <string name="error_parsing_title">Formato inesperado</string>
+    <string name="error_parsing_message">O TSE mudou o formato dos dados. Atualize o app.</string>
+    <string name="error_unknown_title">Algo deu errado</string>
+    <string name="error_unknown_message">Algo deu errado. Tente de novo.</string>
+
+    <string name="picks_lost_title">Escolhas apagadas por segurança</string>
+    <string name="picks_lost_message">Não foi possível ler as escolhas salvas neste aparelho; elas foram apagadas por segurança.</string>
+
+    <!-- Sobre -->
+    <string name="about_title">Sobre</string>
+    <string name="about_no_logos">O app não usa logotipos do TSE ou da Justiça Eleitoral, nem o Brasão da República.</string>
+    <string name="about_source_section">Fonte dos dados</string>
+    <string name="about_source">Fonte dos dados: Tribunal Superior Eleitoral, sistema DivulgaCandContas. Os textos de situação aparecem exatamente como o TSE publica.</string>
+    <string name="about_attribution">Fonte: Tribunal Superior Eleitoral (TSE), dados públicos, licença CC BY</string>
+    <string name="about_open_data_fallback">Quando o DivulgaCandContas recusa a consulta, as listas de candidatos das eleições gerais vêm dos dados abertos do TSE, sem fotos, e o app avisa: “Fonte: dados abertos do TSE”.</string>
+    <string name="about_last_update">Última atualização neste aparelho: %1$s</string>
+    <string name="about_last_update_never">Nenhum dado do TSE baixado ainda.</string>
+    <string name="about_open_divulga">Abrir o DivulgaCandContas</string>
+    <string name="about_open_open_data">Abrir o portal de dados abertos do TSE</string>
+    <string name="about_how_section">Como o app funciona</string>
+    <string name="about_how_election">O app abre na próxima eleição listada pelo TSE (ou na mais recente) e mostra o turno do dia, pelo horário de Brasília. Você pode trocar de eleição na tela inicial.</string>
+    <string name="about_neutrality">Todos os candidatos que o TSE lista aparecem, em ordem de número. O app não classifica, não recomenda e não destaca ninguém, e não reúne as escolhas de quem usa o app.</string>
+    <string name="about_app_section">Aplicativo</string>
+    <string name="about_version">Versão %1$s</string>
+    <string name="about_contact">Contato do desenvolvedor</string>
+    <string name="about_contact_subject">Meu Santinho</string>
+
+    <!-- Política de privacidade (o mesmo texto vai para a URL pública) -->
+    <string name="privacy_title">Política de privacidade</string>
+    <string name="privacy_who_title">Quem somos</string>
+    <string name="privacy_who_body">O Meu Santinho é um aplicativo independente, sem vínculo com o TSE, com a Justiça Eleitoral, com órgãos de governo, partidos ou candidatos. Para falar com o desenvolvedor, use o contato no fim desta página.</string>
+    <string name="privacy_collect_title">O que o app coleta</string>
+    <string name="privacy_collect_body">Nada. O app não tem conta, servidor próprio, anúncios, analytics nem ferramentas de rastreamento ou de relatório de erros. O desenvolvedor não recebe nenhum dado seu.</string>
+    <string name="privacy_tse_title">Consultas ao TSE</string>
+    <string name="privacy_tse_body">Para mostrar as candidaturas, o app consulta direto os sistemas públicos do TSE. Como em qualquer visita ao site do TSE, o tribunal recebe o endereço IP da sua conexão e o código da UF ou do município consultado. As escolhas nunca são enviadas.</string>
+    <string name="privacy_picks_title">Suas escolhas</string>
+    <string name="privacy_picks_body">Escolhas revelam opinião política, dado pessoal sensível pela LGPD (Lei 13.709/2018, art. 5º, II). Elas ficam só neste aparelho, cifradas com uma chave do próprio aparelho, fora de backups, de notificações e de registros. Só saem do app quando você imprime ou compartilha a cola.</string>
+    <string name="privacy_permissions_title">Permissões</string>
+    <string name="privacy_permissions_body">Internet, para consultar o TSE; notificações, só se você ligar o lembrete; biometria, só se você ligar o bloqueio do app.</string>
+    <string name="privacy_delete_title">Como apagar</string>
+    <string name="privacy_delete_body">Em Configurações, “Apagar meus dados” remove escolhas, preferências e dados baixados. Desinstalar o app também apaga tudo.</string>
+    <string name="privacy_public_data_title">Dados públicos de candidatos</string>
+    <string name="privacy_public_data_body">Nomes, números, partidos, situação e fotos de candidatos são dados públicos divulgados pelo TSE (LGPD, art. 7º, § 3º). O app mostra só o necessário para informar o eleitor, como o TSE publica.</string>
+    <string name="privacy_online">Ver a política na internet</string>
+
+    <!-- Licenças -->
+    <string name="licenses_title">Licenças de código aberto</string>
+    <string name="licenses_data_section">Dados</string>
+    <string name="licenses_libraries_section">Bibliotecas</string>
+    <string name="licenses_intro">O app usa estas bibliotecas de código aberto, todas sob a licença Apache 2.0.</string>
+    <string name="licenses_apache">Licença Apache 2.0</string>
+    <string name="licenses_read_apache">Ler o texto da licença Apache 2.0</string>
 </resources>

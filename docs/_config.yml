@@ -1,0 +1,9 @@
+# GitHub Pages (Settings > Pages > Deploy from a branch > main, pasta /docs).
+# Publica só a política de privacidade, em https://<usuario>.github.io/<repositorio>/privacidade/
+# (docs/privacidade/index.html é HTML estático, sem front matter, e vai como está).
+# Os demais documentos continuam no repositório, mas ficam fora do site.
+exclude:
+  - ARCHITECTURE.md
+  - PUBLICACAO.md
+  - data-safety.md
+  - privacidade.md

@@ -1,0 +1,2 @@
+# Os CSVs são cópias byte a byte do formato do TSE (Latin-1, CRLF): sem normalização de fim de linha.
+*.csv -text

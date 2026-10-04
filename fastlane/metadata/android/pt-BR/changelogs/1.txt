@@ -1,0 +1,6 @@
+Primeira versão:
+• candidaturas publicadas pelo TSE, com busca e filtros, em ordem de número;
+• cola na ordem da urna para imprimir, salvar em PDF ou compartilhar como imagem;
+• uso sem internet depois de baixar os dados do seu local;
+• escolhas cifradas, guardadas só no aparelho;
+• lembrete opcional no dia da eleição e bloqueio opcional do app.
