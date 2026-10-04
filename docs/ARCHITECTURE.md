@@ -51,7 +51,7 @@ prestação de contas, bens, propostas de governo, resultados e apuração.
 | Bloqueio opcional | androidx.biometric 1.1.0 |
 | Testes | JUnit 4, kotlinx-coroutines-test, Turbine, MockK, OkHttp MockWebServer3, Robolectric 4.17, Compose UI test |
 
-Módulo único `:app`, pacote `com.veronezzi.meusantinho`, código em `app/src/main/kotlin`:
+Módulo único `:app`, pacote `com.veronezzi.colaeleitoral`, código em `app/src/main/kotlin`:
 `core/` (network, common), `data/` (`remote/api`, `remote/dto`, `local/db`, `local/secure`, `mapper`,
 `repository`), `domain/` (`model`, `repository`), `ui/` (`theme`, `navigation`, `screens/<feature>`,
 `components`), `di/`, `work/`.
@@ -416,7 +416,7 @@ Implementação:
 
 - OkHttp único (`@Singleton`), compartilhado por Retrofit e Coil: connect 15 s, read 30 s, call 60 s;
   `Dispatcher.maxRequestsPerHost = 4`; gzip automático do OkHttp.
-- Cabeçalhos: `User-Agent: MeuSantinho/{versionName} (Android {release}; +{URL da política de
+- Cabeçalhos: `User-Agent: ColaEleitoral/{versionName} (Android {release}; +{URL da política de
   privacidade})` e `Accept: application/json`. Não enviar `Referer`, `Origin`, `sec-ch-ua*`,
   `Sec-Fetch-*`; não usar WebView para buscar JSON.
 - Allowlist de host num interceptor: só `divulgacandcontas.tse.jus.br` (e `cdn.tse.jus.br` se o plano B
@@ -515,10 +515,10 @@ contrato de domínio já comporta isso (os repositórios não expõem a origem).
 
 ## 3. Contrato de domínio
 
-Código em `app/src/main/kotlin/com/veronezzi/meusantinho/domain/{model,repository}/*.kt`, pacote
-`com.veronezzi.meusantinho.domain.model` e `...domain.repository`. Kotlin puro (`java.time`,
+Código em `app/src/main/kotlin/com/veronezzi/colaeleitoral/domain/{model,repository}/*.kt`, pacote
+`com.veronezzi.colaeleitoral.domain.model` e `...domain.repository`. Kotlin puro (`java.time`,
 `java.text.Normalizer`, `kotlinx.coroutines.flow.Flow`), sem tipos do Android. **Copiar para
-`app/src/main/kotlin/com/veronezzi/meusantinho/domain/` sem mudar assinaturas**; mudanças passam por
+`app/src/main/kotlin/com/veronezzi/colaeleitoral/domain/` sem mudar assinaturas**; mudanças passam por
 este documento. Verificado com o compilador Kotlin 2.4.20 (`-Werror`, classpath: stdlib +
 coroutines 1.11.0): sem erros nem avisos.
 
@@ -739,7 +739,7 @@ sensível por desenho.
   alguns fabricantes; o TEE basta para o risco).
 - `data/local/secure/EncryptedBallotSerializer`: `Serializer<BallotStateDto>` do DataStore. Formato
   do arquivo: `[versão: 1 byte = 1][IV: 12 bytes][ciphertext + tag GCM de 128 bits]`, AAD
-  `"com.veronezzi.meusantinho:ballot:v1"`, conteúdo = JSON (kotlinx.serialization) de todas as escolhas.
+  `"com.veronezzi.colaeleitoral:ballot:v1"`, conteúdo = JSON (kotlinx.serialization) de todas as escolhas.
   IV novo a cada escrita (gerado pelo Keystore). `DataStoreFactory.create(serializer, corruptionHandler,
   produceFile = { context.noBackupFilesDir.resolve("ballot.enc") })`.
 - Falha de decifragem (`AEADBadTagException`, `KeyPermanentlyInvalidatedException`,
@@ -811,7 +811,7 @@ sensível por desenho.
 |---|---|---|---|
 | P1 | Apps novos e atualizações com target Android 16 (API 36) desde 31/08/2026 (extensão possível até 01/11/2026) | `targetSdk = 36` | https://support.google.com/googleplay/android-developer/answer/11926878 |
 | P2 | Conta pessoal criada após 13/11/2023: teste fechado com ≥ 12 testadores inscritos por ≥ 14 dias seguidos antes de pedir produção; análise costuma levar até 7 dias | Planejar o teste fechado já (7.2, Q2) | https://support.google.com/googleplay/android-developer/answer/14151465 |
-| P3 | Verificação de desenvolvedor Android: identidade verificada e pacote registrado; obrigatória no Brasil desde 30/09/2026; instalação por adb/Android Studio não é afetada | Verificar a conta e registrar `com.veronezzi.meusantinho` (ID definitivo após o 1º upload) | https://android-developers.googleblog.com/2026/06/android-developer-verification.html ; https://support.google.com/googleplay/android-developer/answer/17134731 |
+| P3 | Verificação de desenvolvedor Android: identidade verificada e pacote registrado; obrigatória no Brasil desde 30/09/2026; instalação por adb/Android Studio não é afetada | Verificar a conta e registrar `com.veronezzi.colaeleitoral` (ID definitivo após o 1º upload) | https://android-developers.googleblog.com/2026/06/android-developer-verification.html ; https://support.google.com/googleplay/android-developer/answer/17134731 |
 | P4 | Informação de governo sem afiliação: fontes fáceis de ver na descrição e na página da loja; deixar claro que o app não representa governo nem entidade política; preencher a declaração "Apps governamentais" | Aviso + link do TSE na descrição da loja, na 1ª execução e em Sobre; declarar "não é app governamental" | https://support.google.com/googleplay/android-developer/answer/9514050 |
 | P5 | Deturpação: em conteúdo político, transparência extra sobre quem é o desenvolvedor e suas afiliações; nome e contato corretos | Nome e contato do desenvolvedor em Sobre e na loja; declarar ausência de afiliação | https://support.google.com/googleplay/android-developer/answer/9888689 |
 | P6 | Falsificação de identidade: proibido usar emblema nacional ou marca de governo sugerindo afiliação | Sem Brasão, sem logos do TSE/Justiça Eleitoral; ícone e nome próprios | https://support.google.com/googleplay/android-developer/answer/9888374 |

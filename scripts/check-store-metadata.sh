@@ -6,8 +6,8 @@
 #   --release            também exige a política de privacidade pronta: sem campos [PREENCHER: ...]
 #                        em docs/privacidade.md e docs/privacidade/index.html, com o e-mail de
 #                        contato no texto e sem os marcadores example.com. O e-mail e a URL vêm de
-#                        MEU_SANTINHO_CONTACT_EMAIL e MEU_SANTINHO_PRIVACY_POLICY_URL ou, se vazias,
-#                        de meuSantinho.contactEmail e meuSantinho.privacyPolicyUrl (gradle.properties).
+#                        COLA_ELEITORAL_CONTACT_EMAIL e COLA_ELEITORAL_PRIVACY_POLICY_URL ou, se vazias,
+#                        de colaEleitoral.contactEmail e colaEleitoral.privacyPolicyUrl (gradle.properties).
 #
 # Limites conferidos (https://support.google.com/googleplay/android-developer/answer/9859152 e
 # https://support.google.com/googleplay/android-developer/answer/9866151):
@@ -243,8 +243,8 @@ check_screenshots tenInchScreenshots 0
 property() { # nome -> valor em gradle.properties
   sed -nE "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*(.*[^[:space:]])[[:space:]]*$/\\1/p" "$root/gradle.properties" | tail -1
 }
-email="${MEU_SANTINHO_CONTACT_EMAIL:-$(property 'meuSantinho\.contactEmail')}"
-url="${MEU_SANTINHO_PRIVACY_POLICY_URL:-$(property 'meuSantinho\.privacyPolicyUrl')}"
+email="${COLA_ELEITORAL_CONTACT_EMAIL:-$(property 'colaEleitoral\.contactEmail')}"
+url="${COLA_ELEITORAL_PRIVACY_POLICY_URL:-$(property 'colaEleitoral\.privacyPolicyUrl')}"
 policy_issue() { if [ "$release" = 1 ]; then err "$*"; else warn "$*"; fi; }
 
 for policy in "$root/docs/privacidade.md" "$root/docs/privacidade/index.html"; do
@@ -258,14 +258,14 @@ for policy in "$root/docs/privacidade.md" "$root/docs/privacidade/index.html"; d
     policy_issue "$name: $pending linha(s) com [PREENCHER: ...] (nome e e-mail do responsável)"
   fi
   if [ -n "$email" ] && [[ "$email" != *example.com* ]] && ! grep -qF -- "$email" "$policy"; then
-    policy_issue "$name: não contém o e-mail de contato $email (meuSantinho.contactEmail)"
+    policy_issue "$name: não contém o e-mail de contato $email (colaEleitoral.contactEmail)"
   fi
 done
 if [[ "$email" == *example.com* ]] || [ -z "$email" ]; then
-  policy_issue "e-mail de contato ainda é marcador (${email:-vazio}); defina meuSantinho.contactEmail"
+  policy_issue "e-mail de contato ainda é marcador (${email:-vazio}); defina colaEleitoral.contactEmail"
 fi
 if [[ "$url" == *example.com* ]] || [ -z "$url" ]; then
-  policy_issue "URL da política ainda é marcador (${url:-vazia}); defina meuSantinho.privacyPolicyUrl"
+  policy_issue "URL da política ainda é marcador (${url:-vazia}); defina colaEleitoral.privacyPolicyUrl"
 fi
 
 echo

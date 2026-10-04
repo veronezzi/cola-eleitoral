@@ -8,7 +8,7 @@ A versão publicada fica em <https://[PREENCHER: endereço público desta págin
 aparece dentro do app, em Sobre > Política de privacidade.
 
 > **Antes de publicar**, troque todos os campos `[PREENCHER: ...]`. O e-mail tem de ser o mesmo da
-> propriedade `meuSantinho.contactEmail` (gradle.properties) e do contato da ficha no Google Play.
+> propriedade `colaEleitoral.contactEmail` (gradle.properties) e do contato da ficha no Google Play.
 > Apague este aviso depois. Veja `docs/PUBLICACAO.md`.
 
 ## Resumo

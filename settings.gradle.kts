@@ -31,5 +31,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "meu-santinho"
+rootProject.name = "cola-eleitoral"
 include(":app")

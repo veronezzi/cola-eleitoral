@@ -9,13 +9,13 @@ plugins {
 
 // Assinatura de release: vem só de variáveis de ambiente (segredos do CI), nada fica no repositório.
 // Sem nenhuma delas, o release sai sem assinatura (serve para checar bundleRelease localmente).
-// MEU_SANTINHO_KEYSTORE deve ser um caminho absoluto (caminhos relativos partem de app/).
+// COLA_ELEITORAL_KEYSTORE deve ser um caminho absoluto (caminhos relativos partem de app/).
 val releaseSigningEnv: Map<String, String?> =
     listOf(
-        "MEU_SANTINHO_KEYSTORE",
-        "MEU_SANTINHO_KEYSTORE_PASSWORD",
-        "MEU_SANTINHO_KEY_ALIAS",
-        "MEU_SANTINHO_KEY_PASSWORD",
+        "COLA_ELEITORAL_KEYSTORE",
+        "COLA_ELEITORAL_KEYSTORE_PASSWORD",
+        "COLA_ELEITORAL_KEY_ALIAS",
+        "COLA_ELEITORAL_KEY_PASSWORD",
     ).associateWith { name -> providers.environmentVariable(name).orNull?.takeIf { it.isNotBlank() } }
 val missingReleaseSigningEnv = releaseSigningEnv.filterValues { it == null }.keys
 val hasReleaseSigning = missingReleaseSigningEnv.isEmpty()
@@ -37,9 +37,9 @@ fun publishingProperty(name: String): String =
 // então debug, lint, testDebugUnitTest e o CI não são afetados. Ver docs/PUBLICACAO.md.
 val checkReleasePublishingProperties = tasks.register("checkReleasePublishingProperties") {
     group = "verification"
-    description = "Falha se meuSantinho.privacyPolicyUrl ou meuSantinho.contactEmail ainda forem marcadores."
-    val privacyPolicyUrl = providers.gradleProperty("meuSantinho.privacyPolicyUrl").orElse("")
-    val contactEmail = providers.gradleProperty("meuSantinho.contactEmail").orElse("")
+    description = "Falha se colaEleitoral.privacyPolicyUrl ou colaEleitoral.contactEmail ainda forem marcadores."
+    val privacyPolicyUrl = providers.gradleProperty("colaEleitoral.privacyPolicyUrl").orElse("")
+    val contactEmail = providers.gradleProperty("colaEleitoral.contactEmail").orElse("")
     inputs.property("privacyPolicyUrl", privacyPolicyUrl)
     inputs.property("contactEmail", contactEmail)
     doLast {
@@ -48,13 +48,13 @@ val checkReleasePublishingProperties = tasks.register("checkReleasePublishingPro
         // Sem acentos de propósito, como as outras mensagens deste arquivo.
         val problems = buildList {
             when {
-                "example.com" in url.lowercase() -> add("meuSantinho.privacyPolicyUrl ainda e o marcador: $url")
-                !url.startsWith("https://") -> add("meuSantinho.privacyPolicyUrl precisa comecar com https://: $url")
+                "example.com" in url.lowercase() -> add("colaEleitoral.privacyPolicyUrl ainda e o marcador: $url")
+                !url.startsWith("https://") -> add("colaEleitoral.privacyPolicyUrl precisa comecar com https://: $url")
             }
             when {
-                "example.com" in email.lowercase() -> add("meuSantinho.contactEmail ainda e o marcador: $email")
+                "example.com" in email.lowercase() -> add("colaEleitoral.contactEmail ainda e o marcador: $email")
                 !Regex("""[^@\s]+@[^@\s]+\.[^@\s]+""").matches(email) ->
-                    add("meuSantinho.contactEmail nao parece um e-mail: $email")
+                    add("colaEleitoral.contactEmail nao parece um e-mail: $email")
             }
         }
         if (problems.isNotEmpty()) {
@@ -63,8 +63,8 @@ val checkReleasePublishingProperties = tasks.register("checkReleasePublishingPro
                     separator = "\n",
                     prefix = "Build de release bloqueado: dados de publicacao invalidos.\n",
                     postfix = "\nDefina os valores reais em gradle.properties ou na linha de comando, por exemplo:\n" +
-                        "  ./gradlew bundleRelease -PmeuSantinho.privacyPolicyUrl=https://... " +
-                        "-PmeuSantinho.contactEmail=...\n" +
+                        "  ./gradlew bundleRelease -PcolaEleitoral.privacyPolicyUrl=https://... " +
+                        "-PcolaEleitoral.contactEmail=...\n" +
                         "Veja docs/PUBLICACAO.md.",
                 ) { "  - $it" },
             )
@@ -76,13 +76,13 @@ tasks.named { it.startsWith("pre") && it.endsWith("ReleaseBuild") }.configureEac
 }
 
 android {
-    namespace = "com.veronezzi.meusantinho"
+    namespace = "com.veronezzi.colaeleitoral"
     // 37 porque as versões estáveis atuais de core, Compose, navigation e material3-adaptive exigem
     // minCompileSdk 37. O targetSdk segue o mínimo do Google Play para apps novos (API 36).
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.veronezzi.meusantinho"
+        applicationId = "com.veronezzi.colaeleitoral"
         minSdk = 26
         // Mínimo do Google Play para apps novos desde 31/08/2026. O aviso OldTargetApi do lint é
         // esperado; subir para 37 exige testar as mudanças de comportamento do Android 17.
@@ -94,17 +94,17 @@ android {
 
         // Dados de publicação vêm de gradle.properties (ou -P na linha de comando). Os valores
         // padrão são marcadores e não podem ir para um build de release.
-        buildConfigField("String", "PRIVACY_POLICY_URL", "\"${publishingProperty("meuSantinho.privacyPolicyUrl")}\"")
-        buildConfigField("String", "CONTACT_EMAIL", "\"${publishingProperty("meuSantinho.contactEmail")}\"")
+        buildConfigField("String", "PRIVACY_POLICY_URL", "\"${publishingProperty("colaEleitoral.privacyPolicyUrl")}\"")
+        buildConfigField("String", "CONTACT_EMAIL", "\"${publishingProperty("colaEleitoral.contactEmail")}\"")
     }
 
     signingConfigs {
         if (hasReleaseSigning) {
             create("release") {
-                storeFile = file(releaseSigningEnv.getValue("MEU_SANTINHO_KEYSTORE")!!)
-                storePassword = releaseSigningEnv.getValue("MEU_SANTINHO_KEYSTORE_PASSWORD")
-                keyAlias = releaseSigningEnv.getValue("MEU_SANTINHO_KEY_ALIAS")
-                keyPassword = releaseSigningEnv.getValue("MEU_SANTINHO_KEY_PASSWORD")
+                storeFile = file(releaseSigningEnv.getValue("COLA_ELEITORAL_KEYSTORE")!!)
+                storePassword = releaseSigningEnv.getValue("COLA_ELEITORAL_KEYSTORE_PASSWORD")
+                keyAlias = releaseSigningEnv.getValue("COLA_ELEITORAL_KEY_ALIAS")
+                keyPassword = releaseSigningEnv.getValue("COLA_ELEITORAL_KEY_PASSWORD")
             }
         }
     }

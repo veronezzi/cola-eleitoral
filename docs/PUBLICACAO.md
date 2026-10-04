@@ -50,7 +50,7 @@ Passos na seção 7.
   (<https://github.com/Meu-Santinho/meu-santinho>), e "santinho" é o nome popular do material de
   campanha. Antes do primeiro upload, pesquise o nome no Google Play e no INPI
   (<https://busca.inpi.gov.br/>) e decida se mantém "Meu Santinho" ou troca.
-- **`applicationId` é permanente:** depois do primeiro upload, `com.veronezzi.meusantinho` não pode
+- **`applicationId` é permanente:** depois do primeiro upload, `com.veronezzi.colaeleitoral` não pode
   mais ser trocado nem reaproveitado, nem se o app for apagado. O nome exibido pode mudar depois; o
   pacote, não. Se for trocar, troque antes de gerar o primeiro AAB.
 - Se trocar o nome, atualize: `app_name` em `res/values/strings.xml`, `title.txt` e as descrições, a
@@ -122,7 +122,7 @@ pede a permissão de notificação só ao ligar); o bloqueio do app; TalkBack e 
 4. **Verificação de desenvolvedor Android:** obrigatória no Brasil desde 30/09/2026 para instalações
    em aparelhos certificados. Apps do Google Play são registrados automaticamente na maioria dos
    casos; depois do primeiro upload, confira na página inicial do Play Console se
-   `com.veronezzi.meusantinho` aparece registrado
+   `com.veronezzi.colaeleitoral` aparece registrado
    (<https://developer.android.com/developer-verification>,
    <https://support.google.com/googleplay/android-developer/answer/17134731>).
 
@@ -139,7 +139,7 @@ keytool -genkeypair -v \
 ```
 
 - O `keytool` pede a senha. Em PKCS12, a senha do keystore e a da chave são a mesma: use o mesmo
-  valor em `MEU_SANTINHO_KEYSTORE_PASSWORD` e `MEU_SANTINHO_KEY_PASSWORD`.
+  valor em `COLA_ELEITORAL_KEYSTORE_PASSWORD` e `COLA_ELEITORAL_KEY_PASSWORD`.
 - `-validity 10000` são cerca de 27 anos.
 - Guarde `upload-keystore.jks` e a senha num gerenciador de senhas, com uma cópia de segurança. O
   `.gitignore` já ignora `*.jks`, `*.keystore` e `*.p12`; nunca faça commit da chave.
@@ -161,10 +161,10 @@ assinatura do app continua com o Google.
 Assinar um build local (opcional), com variáveis de ambiente e caminho absoluto:
 
 ```bash
-export MEU_SANTINHO_KEYSTORE="$HOME/chaves/upload-keystore.jks"
-export MEU_SANTINHO_KEY_ALIAS=upload
-read -rs MEU_SANTINHO_KEYSTORE_PASSWORD && export MEU_SANTINHO_KEYSTORE_PASSWORD
-export MEU_SANTINHO_KEY_PASSWORD="$MEU_SANTINHO_KEYSTORE_PASSWORD"
+export COLA_ELEITORAL_KEYSTORE="$HOME/chaves/upload-keystore.jks"
+export COLA_ELEITORAL_KEY_ALIAS=upload
+read -rs COLA_ELEITORAL_KEYSTORE_PASSWORD && export COLA_ELEITORAL_KEYSTORE_PASSWORD
+export COLA_ELEITORAL_KEY_PASSWORD="$COLA_ELEITORAL_KEYSTORE_PASSWORD"
 ./gradlew bundleRelease
 ```
 
@@ -178,12 +178,12 @@ mostrá-lo e sem deixá-lo no histórico do shell.
 
 | Nome | Tipo | Valor |
 |---|---|---|
-| `MEU_SANTINHO_KEYSTORE_BASE64` | segredo | O keystore em base64: `base64 -w 0 upload-keystore.jks \| gh secret set MEU_SANTINHO_KEYSTORE_BASE64` (no macOS: `base64 -i upload-keystore.jks \| gh secret set ...`) |
-| `MEU_SANTINHO_KEYSTORE_PASSWORD` | segredo | Senha do keystore (`gh secret set MEU_SANTINHO_KEYSTORE_PASSWORD`) |
-| `MEU_SANTINHO_KEY_ALIAS` | segredo | `upload` |
-| `MEU_SANTINHO_KEY_PASSWORD` | segredo | A mesma senha (PKCS12) |
-| `MEU_SANTINHO_PRIVACY_POLICY_URL` | variável (opcional) | URL pública da política; substitui a de `gradle.properties` |
-| `MEU_SANTINHO_CONTACT_EMAIL` | variável (opcional) | E-mail de contato; substitui o de `gradle.properties` |
+| `COLA_ELEITORAL_KEYSTORE_BASE64` | segredo | O keystore em base64: `base64 -w 0 upload-keystore.jks \| gh secret set COLA_ELEITORAL_KEYSTORE_BASE64` (no macOS: `base64 -i upload-keystore.jks \| gh secret set ...`) |
+| `COLA_ELEITORAL_KEYSTORE_PASSWORD` | segredo | Senha do keystore (`gh secret set COLA_ELEITORAL_KEYSTORE_PASSWORD`) |
+| `COLA_ELEITORAL_KEY_ALIAS` | segredo | `upload` |
+| `COLA_ELEITORAL_KEY_PASSWORD` | segredo | A mesma senha (PKCS12) |
+| `COLA_ELEITORAL_PRIVACY_POLICY_URL` | variável (opcional) | URL pública da política; substitui a de `gradle.properties` |
+| `COLA_ELEITORAL_CONTACT_EMAIL` | variável (opcional) | E-mail de contato; substitui o de `gradle.properties` |
 | `PLAY_SERVICE_ACCOUNT_JSON` | segredo (opcional) | JSON da conta de serviço (seção 12). De preferência como segredo do ambiente `google-play` |
 | `PLAY_UPLOAD_TRACK` | variável (opcional) | `internal` ou `alpha`: envia ao Play em cada tag. Vazia = não envia |
 | `PLAY_RELEASE_STATUS` | variável (opcional) | `draft` (padrão: a versão fica como rascunho no Play Console) ou `completed` |
@@ -203,10 +203,10 @@ O workflow nunca imprime segredos: só os nomes dos que faltam. A chave é decod
    outra hospedagem estática.
 3. Ponha os valores reais em `gradle.properties` (não são segredos; aparecem no app):
    ```properties
-   meuSantinho.privacyPolicyUrl=https://<usuario>.github.io/<repositorio>/privacidade/
-   meuSantinho.contactEmail=<o mesmo e-mail da política e da ficha>
+   colaEleitoral.privacyPolicyUrl=https://<usuario>.github.io/<repositorio>/privacidade/
+   colaEleitoral.contactEmail=<o mesmo e-mail da política e da ficha>
    ```
-   ou defina as variáveis `MEU_SANTINHO_PRIVACY_POLICY_URL` e `MEU_SANTINHO_CONTACT_EMAIL` (seção 6).
+   ou defina as variáveis `COLA_ELEITORAL_PRIVACY_POLICY_URL` e `COLA_ELEITORAL_CONTACT_EMAIL` (seção 6).
 4. Confira: `scripts/check-store-metadata.sh --release` não pode ter erros. O `bundleRelease` falha
    enquanto os valores forem `example.com` (também exige `https://` e um e-mail válido).
 
@@ -268,7 +268,7 @@ O primeiro AAB precisa ser enviado à mão: a API do Play não envia para um pac
 Antes de enviar para revisão, confira se cada afirmação da descrição vale para a versão publicada.
 
 **Configurações da loja**: categoria **Ferramentas** (não use "Notícias e revistas"); e-mail de
-contato = o mesmo de `meuSantinho.contactEmail` e da política; site opcional (a página do projeto).
+contato = o mesmo de `colaEleitoral.contactEmail` e da política; site opcional (a página do projeto).
 
 **Países**: Brasil. Eleitores no exterior votam só para Presidente e o TSE recusa consultas de fora do
 Brasil; incluir outros países faz sentido só se a fonte de dados abertos funcionar para eles.

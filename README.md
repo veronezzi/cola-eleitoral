@@ -56,7 +56,7 @@ e escolhas cifradas) · Coil 3 · WorkManager · androidx.biometric. Testes: JUn
 kotlinx-coroutines-test, Turbine, MockK, MockWebServer, Robolectric e Compose UI test.
 
 AGP 9.4, Gradle 9.8, compileSdk 37, targetSdk 36, minSdk 26 (Android 8.0). Módulo único `:app`,
-pacote `com.veronezzi.meusantinho`.
+pacote `com.veronezzi.colaeleitoral`.
 
 ## Como compilar e testar
 
@@ -77,11 +77,11 @@ exige 21). O Gradle encontra os dois JDKs instalados e baixa o que faltar (fooja
 ```bash
 # AAB de release sem assinatura, para conferir o build (a URL e o e-mail precisam ser reais):
 ./gradlew bundleRelease \
-  -PmeuSantinho.privacyPolicyUrl=https://<usuario>.github.io/<repositorio>/privacidade/ \
-  -PmeuSantinho.contactEmail=<e-mail de contato>
+  -PcolaEleitoral.privacyPolicyUrl=https://<usuario>.github.io/<repositorio>/privacidade/ \
+  -PcolaEleitoral.contactEmail=<e-mail de contato>
 
-# Assinado: defina MEU_SANTINHO_KEYSTORE (caminho absoluto), MEU_SANTINHO_KEYSTORE_PASSWORD,
-# MEU_SANTINHO_KEY_ALIAS e MEU_SANTINHO_KEY_PASSWORD antes do comando acima.
+# Assinado: defina COLA_ELEITORAL_KEYSTORE (caminho absoluto), COLA_ELEITORAL_KEYSTORE_PASSWORD,
+# COLA_ELEITORAL_KEY_ALIAS e COLA_ELEITORAL_KEY_PASSWORD antes do comando acima.
 
 scripts/check-store-metadata.sh            # limites e formato da ficha da loja
 scripts/check-store-metadata.sh --release  # idem, e exige a política de privacidade preenchida
@@ -89,7 +89,7 @@ python3 scripts/render-store-graphics.py   # refaz icon.png e featureGraphic.png
 ```
 
 - **Trava de release:** qualquer tarefa da variante release (`assembleRelease`, `bundleRelease`...)
-  falha enquanto `meuSantinho.privacyPolicyUrl` ou `meuSantinho.contactEmail` (em `gradle.properties`)
+  falha enquanto `colaEleitoral.privacyPolicyUrl` ou `colaEleitoral.contactEmail` (em `gradle.properties`)
   contiverem `example.com`. Debug, lint e testes não são afetados.
 - **Workflow `Release`** (`.github/workflows/release.yml`): roda com tags `v*` (por exemplo,
   `v1.0.0`) ou à mão; faz lint e testes, gera o AAB assinado com segredos do GitHub e guarda AAB e
@@ -100,7 +100,7 @@ python3 scripts/render-store-graphics.py   # refaz icon.png e featureGraphic.png
 ## Estrutura do projeto
 
 ```
-app/src/main/kotlin/com/veronezzi/meusantinho/
+app/src/main/kotlin/com/veronezzi/colaeleitoral/
   core/          rede (OkHttp, interceptores, JSON) e utilitários comuns
   data/          remote/api, remote/dto, local/db (Room), local/secure (escolhas cifradas), mapper, repository
   domain/        model e repository: contrato do domínio, Kotlin puro
