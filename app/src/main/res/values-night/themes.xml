@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Janela escura no modo noturno, para não piscar branco antes do Compose desenhar. -->
+    <style name="Theme.MeuSantinho" parent="android:Theme.Material.NoActionBar" />
+</resources>

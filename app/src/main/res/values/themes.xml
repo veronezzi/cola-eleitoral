@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tema da janela; a interface em si é desenhada pelo Compose (MaterialTheme). -->
+    <style name="Theme.MeuSantinho" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Splash (core-splashscreen); MainActivity chama installSplashScreen() antes de super.onCreate. -->
+    <style name="Theme.MeuSantinho.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/brand_neutral</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.MeuSantinho</item>
+    </style>
+</resources>

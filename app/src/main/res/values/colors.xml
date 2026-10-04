@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Cinza-azulado neutro, sem associação partidária. Provisório até a identidade visual final. -->
+    <color name="brand_neutral">#FF37474F</color>
+    <color name="brand_on_neutral">#FFFFFFFF</color>
+</resources>

@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Lint, testes unitários e build debug
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: JDKs 21 e 17 (Temurin)
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          # O build compila com o toolchain 17; o Robolectric (SDK 36) roda os testes numa JVM 21.
+          # Os dois JDKs vão para o ~/.m2/toolchains.xml, onde o Gradle os detecta; o último da
+          # lista vira o JAVA_HOME, então o próprio Gradle roda no 17.
+          java-version: |
+            21
+            17
+
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Lint, testes unitários e APK debug
+        run: ./gradlew lint testDebugUnitTest assembleDebug
+
+      - name: Publicar relatórios do lint e dos testes
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: relatorios
+          path: |
+            app/build/reports/lint-results-*
+            app/build/reports/tests/
+          if-no-files-found: ignore

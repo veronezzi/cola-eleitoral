@@ -1,0 +1,10 @@
+# Normaliza finais de linha; o script do wrapper precisa de LF para rodar no Linux/CI.
+* text=auto eol=lf
+/gradlew text eol=lf
+*.bat text eol=crlf
+
+# Binários
+*.jar binary
+*.png binary
+*.webp binary
+*.jpg binary

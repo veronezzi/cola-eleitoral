@@ -1,0 +1,30 @@
+# Gradle e Kotlin
+.gradle/
+build/
+.kotlin/
+
+# Configuração local (caminho do SDK) e segredos de assinatura: nunca versionar
+local.properties
+keystore.properties
+*.jks
+*.keystore
+*.p12
+
+# Saída padrão do "Generate Signed Bundle/APK" do Android Studio
+/app/release/
+
+# Android Studio / IntelliJ: só as configurações compartilháveis entram no git
+*.iml
+.idea/*
+!.idea/codeStyles/
+!.idea/inspectionProfiles/
+!.idea/dictionaries/
+!.idea/copyright/
+!.idea/runConfigurations/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
