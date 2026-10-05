@@ -8,6 +8,7 @@ import com.veronezzi.colaeleitoral.domain.model.BallotPick
 import com.veronezzi.colaeleitoral.domain.model.Candidate
 import com.veronezzi.colaeleitoral.domain.model.CandidateDetail
 import com.veronezzi.colaeleitoral.domain.model.CandidateStatus
+import com.veronezzi.colaeleitoral.domain.model.DataSource
 import com.veronezzi.colaeleitoral.domain.model.Election
 import com.veronezzi.colaeleitoral.domain.model.ElectionScope
 import com.veronezzi.colaeleitoral.domain.model.OfficeRules
@@ -24,6 +25,7 @@ import com.veronezzi.colaeleitoral.ui.common.TseLinks
 import com.veronezzi.colaeleitoral.ui.common.candidateNumberText
 import com.veronezzi.colaeleitoral.ui.common.isRoundOpen
 import com.veronezzi.colaeleitoral.ui.common.toFreshness
+import com.veronezzi.colaeleitoral.ui.common.tryLocalWrite
 import com.veronezzi.colaeleitoral.ui.navigation.CandidateDetailRoute
 import com.veronezzi.colaeleitoral.ui.navigation.roundOf
 import com.veronezzi.colaeleitoral.ui.screens.candidates.CandidateListViewModel
@@ -32,6 +34,7 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -99,6 +102,8 @@ data class CandidateDetailUiState(
     val isSaving: Boolean = false,
     val confirmReplace: BallotPick? = null,
     val message: DetailMessage? = null,
+    /** Saved picks can't be read right now: saving and removing wait, a banner offers a retry. */
+    val picksUnavailable: Boolean = false,
 ) {
     val hasSeveralSeats: Boolean get() = maxPicks > 1
 }
@@ -113,9 +118,10 @@ private data class Transient(
 
 /**
  * Candidate detail (ARCHITECTURE.md 4.5). Shows the cached list data at once and the full detail
- * when it arrives; the TSE texts are verbatim. "Salvar no meu santinho" saves a snapshot in the
- * route's vote: an occupied vote asks before replacing, and the same candidate is refused in the
- * other Senate vote. Nothing evaluative is said about any candidate.
+ * when it arrives; the TSE texts are verbatim. "Salvar na minha cola" saves a snapshot in the
+ * route's vote, tagged with the TSE system it came from: an occupied vote asks before replacing,
+ * and the same candidate is refused in the other Senate vote. Nothing evaluative is said about any
+ * candidate. A failed write (disk full) is reported and leaves the picks as they were.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel(assistedFactory = CandidateDetailViewModel.Factory::class)
@@ -134,6 +140,7 @@ class CandidateDetailViewModel @AssistedInject constructor(
 
     private val round: Round = roundOf(route.round)
     private val transient = MutableStateFlow(Transient())
+    private var refreshJob: Job? = null
 
     private val election = electionRepository.observeElections()
         .map { cached -> cached.value.firstOrNull { it.id == route.electionId } }
@@ -160,8 +167,8 @@ class CandidateDetailViewModel @AssistedInject constructor(
         ballotRepository.observeBallot(route.electionId, round),
         combine(election, office) { e, o -> e to o },
         settingsRepository.settings.map { it.location },
-        transient,
-    ) { (detailData, listData), picks, (election, office), location, transient ->
+        combine(transient, ballotRepository.observeUnavailable()) { t, unavailable -> t to unavailable },
+    ) { (detailData, listData), picks, (election, office), location, (transient, unavailable) ->
         val detail = detailData.value
         val listCandidate = listData.value.firstOrNull { it.id == route.candidateId }
         val candidate = detail?.candidate ?: listCandidate
@@ -191,6 +198,7 @@ class CandidateDetailViewModel @AssistedInject constructor(
             isSaving = transient.isSaving,
             confirmReplace = transient.confirmReplace,
             message = transient.message,
+            picksUnavailable = unavailable,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CandidateDetailUiState(slot = route.slot))
 
@@ -200,10 +208,18 @@ class CandidateDetailViewModel @AssistedInject constructor(
 
     fun onRefresh() = refresh(force = true)
 
-    /** "Salvar no meu santinho". */
+    /** Back from the background: refresh within the TTL (statuses change until the eve of the vote). */
+    fun onScreenResumed() = refresh(force = false)
+
+    /** "Tentar de novo" on the banner shown while the picks can't be read. */
+    fun onRetryRead() {
+        viewModelScope.launch { tryLocalWrite { ballotRepository.retryRead() } }
+    }
+
+    /** "Salvar na minha cola". */
     fun onSaveClick() {
         val state = uiState.value
-        if (!state.canEdit || state.isSaving || state.candidate == null) return
+        if (!state.canEdit || state.isSaving || state.candidate == null || state.picksUnavailable) return
         when (val pick = state.pickState) {
             PickState.SavedHere -> Unit
             is PickState.InOtherSlot -> transient.update { it.copy(message = DetailMessage.Duplicate(pick.otherSlot)) }
@@ -221,19 +237,28 @@ class CandidateDetailViewModel @AssistedInject constructor(
         transient.update { it.copy(confirmReplace = null) }
     }
 
-    /** "Remover do meu santinho", with undo in the snackbar. */
+    /** "Remover da minha cola", with undo in the snackbar. */
     fun onRemoveClick() {
+        if (uiState.value.picksUnavailable) return
         viewModelScope.launch {
             val pick = ballotRepository.observeBallot(route.electionId, round).first()
                 .firstOrNull { it.officeCode == route.officeCode && it.slot == route.slot && it.candidateId == route.candidateId }
                 ?: return@launch
-            ballotRepository.removePick(pick.key)
-            transient.update { it.copy(message = DetailMessage.Removed(pick)) }
+            val removed = tryLocalWrite { ballotRepository.removePick(pick.key) } != null
+            transient.update {
+                it.copy(message = if (removed) DetailMessage.Removed(pick) else DetailMessage.Failed(AppError.Storage))
+            }
         }
     }
 
     fun onUndoRemove(pick: BallotPick) {
-        viewModelScope.launch { ballotRepository.savePick(pick) }
+        viewModelScope.launch {
+            when (val result = tryLocalWrite { ballotRepository.savePick(pick) }) {
+                null -> transient.update { it.copy(message = DetailMessage.Failed(AppError.Storage)) }
+                is SavePickResult.Failed -> transient.update { it.copy(message = DetailMessage.Failed(result.error)) }
+                else -> Unit
+            }
+        }
     }
 
     fun onMessageShown() {
@@ -245,38 +270,51 @@ class CandidateDetailViewModel @AssistedInject constructor(
         val candidate = state.candidate ?: return
         transient.update { it.copy(isSaving = true) }
         viewModelScope.launch {
-            val office = office.first()
-            val status = state.detail?.candidate?.status ?: candidate.status
-            val pick = BallotPick(
-                electionId = route.electionId,
-                electionYear = route.year,
-                round = round,
-                officeCode = route.officeCode,
-                officeName = state.officeName,
-                urnaOrder = office?.urnaOrder ?: OfficeRules.urnaOrder(route.officeCode) ?: 0,
-                digitCount = state.digitCount,
-                slot = route.slot,
-                ueCode = route.ueCode,
-                candidateId = candidate.id,
-                candidateNumber = state.numberText,
-                ballotName = candidate.ballotName,
-                partyAcronym = candidate.party.acronym,
-                coalition = candidate.coalition,
-                runningMateNames = state.detail?.runningMates?.map { it.ballotName }.orEmpty(),
-                statusAtSave = status.registration,
-                savedAt = clock.now(),
-            )
-            val message = when (val result = ballotRepository.savePick(pick)) {
-                SavePickResult.Saved -> DetailMessage.Saved(statusNotice = status.registration.takeIf { status.needsNotice() })
-                is SavePickResult.DuplicateCandidate -> DetailMessage.Duplicate(result.otherSlot)
-                is SavePickResult.Failed -> DetailMessage.Failed(result.error)
+            try {
+                savePick(state, candidate)
+            } finally {
+                transient.update { it.copy(isSaving = false) }
             }
-            transient.update { it.copy(isSaving = false, message = message) }
         }
     }
 
+    private suspend fun savePick(state: CandidateDetailUiState, candidate: Candidate) {
+        val office = office.first()
+        // The status shown comes from the detail when loaded, else from the list: so does its source.
+        val status = state.detail?.candidate?.status ?: candidate.status
+        val pick = BallotPick(
+            electionId = route.electionId,
+            electionYear = route.year,
+            round = round,
+            officeCode = route.officeCode,
+            officeName = state.officeName,
+            urnaOrder = office?.urnaOrder ?: OfficeRules.urnaOrder(route.officeCode) ?: 0,
+            digitCount = state.digitCount,
+            slot = route.slot,
+            ueCode = route.ueCode,
+            candidateId = candidate.id,
+            candidateNumber = state.numberText,
+            ballotName = candidate.ballotName,
+            partyAcronym = candidate.party.acronym,
+            coalition = candidate.coalition,
+            runningMateNames = state.detail?.runningMates?.map { it.ballotName }.orEmpty(),
+            statusAtSave = status.registration,
+            savedAt = clock.now(),
+            source = state.freshness?.source ?: DataSource.DIVULGA_CAND_CONTAS,
+        )
+        val message = when (val result = tryLocalWrite { ballotRepository.savePick(pick) }) {
+            SavePickResult.Saved -> DetailMessage.Saved(statusNotice = status.registration.takeIf { status.needsNotice() })
+            is SavePickResult.DuplicateCandidate -> DetailMessage.Duplicate(result.otherSlot)
+            is SavePickResult.Failed -> DetailMessage.Failed(result.error)
+            null -> DetailMessage.Failed(AppError.Storage)
+        }
+        transient.update { it.copy(message = message) }
+    }
+
+    /** One refresh at a time: a retry while one is running waits for its result. */
     private fun refresh(force: Boolean) {
-        viewModelScope.launch {
+        if (refreshJob?.isActive == true) return
+        refreshJob = viewModelScope.launch {
             transient.update { it.copy(isRefreshing = true, refreshError = null) }
             val election = electionRepository.observeElections().first().value
                 .firstOrNull { it.id == route.electionId }
@@ -288,8 +326,13 @@ class CandidateDetailViewModel @AssistedInject constructor(
                     scope = if (route.ueCode.all { it.isDigit() }) ElectionScope.MUNICIPAL else ElectionScope.GENERAL,
                     date = null,
                 )
-            val result = candidateRepository.refreshCandidateDetail(election, route.ueCode, route.candidateId, force)
-            transient.update { it.copy(isRefreshing = false, refreshError = (result as? AppResult.Failure)?.error) }
+            var error: AppError? = null
+            try {
+                val result = candidateRepository.refreshCandidateDetail(election, route.ueCode, route.candidateId, force)
+                error = (result as? AppResult.Failure)?.error
+            } finally {
+                transient.update { it.copy(isRefreshing = false, refreshError = error) }
+            }
         }
     }
 

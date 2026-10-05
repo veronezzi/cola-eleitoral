@@ -3,6 +3,7 @@ package com.veronezzi.colaeleitoral.ui.testing
 import com.veronezzi.colaeleitoral.domain.model.BallotPick
 import com.veronezzi.colaeleitoral.domain.model.Candidate
 import com.veronezzi.colaeleitoral.domain.model.CandidateStatus
+import com.veronezzi.colaeleitoral.domain.model.DataSource
 import com.veronezzi.colaeleitoral.domain.model.Election
 import com.veronezzi.colaeleitoral.domain.model.ElectionScope
 import com.veronezzi.colaeleitoral.domain.model.Office
@@ -108,6 +109,7 @@ object UiTestData {
         round: Round = Round.FIRST,
         statusAtSave: String = candidate.status.registration,
         ueCode: String = office.ueCode,
+        source: DataSource = DataSource.DIVULGA_CAND_CONTAS,
     ) = BallotPick(
         electionId = ELECTION_ID,
         electionYear = 2026,
@@ -126,5 +128,6 @@ object UiTestData {
         runningMateNames = emptyList(),
         statusAtSave = statusAtSave,
         savedAt = Instant.parse("2026-09-30T12:00:00Z"),
+        source = source,
     )
 }

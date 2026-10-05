@@ -1,16 +1,13 @@
 package com.veronezzi.colaeleitoral.data.mapper
 
 import com.veronezzi.colaeleitoral.data.local.db.CandidateColumns
-import com.veronezzi.colaeleitoral.data.local.db.CandidateDetailEntity
 import com.veronezzi.colaeleitoral.data.local.db.CandidateEntity
 import com.veronezzi.colaeleitoral.data.local.db.ElectionEntity
 import com.veronezzi.colaeleitoral.data.local.db.MunicipalityEntity
 import com.veronezzi.colaeleitoral.data.local.db.OfficeEntity
-import com.veronezzi.colaeleitoral.data.local.db.RunningMateEntity
 import com.veronezzi.colaeleitoral.data.remote.RemoteOffice
 import com.veronezzi.colaeleitoral.domain.model.AppError
 import com.veronezzi.colaeleitoral.domain.model.Candidate
-import com.veronezzi.colaeleitoral.domain.model.CandidateDetail
 import com.veronezzi.colaeleitoral.domain.model.CandidateStatus
 import com.veronezzi.colaeleitoral.domain.model.DataSource
 import com.veronezzi.colaeleitoral.domain.model.Election
@@ -18,9 +15,8 @@ import com.veronezzi.colaeleitoral.domain.model.ElectionScope
 import com.veronezzi.colaeleitoral.domain.model.ElectoralUnit
 import com.veronezzi.colaeleitoral.domain.model.Party
 import com.veronezzi.colaeleitoral.domain.model.Round
-import com.veronezzi.colaeleitoral.domain.model.RunningMate
+import com.veronezzi.colaeleitoral.domain.model.normalizeForSearch
 import java.time.LocalDate
-import java.time.LocalDateTime
 import java.time.format.DateTimeParseException
 
 fun Election.toEntity() = ElectionEntity(
@@ -44,8 +40,13 @@ fun ElectionEntity.toDomainOrNull(): Election? {
     )
 }
 
-fun ElectoralUnit.toMunicipalityEntity(sourceElectionId: Long) =
-    MunicipalityEntity(code = code, uf = uf, name = name, sourceElectionId = sourceElectionId)
+fun ElectoralUnit.toMunicipalityEntity(sourceElectionId: Long) = MunicipalityEntity(
+    code = code,
+    uf = uf,
+    name = name,
+    sourceElectionId = sourceElectionId,
+    searchKey = normalizeForSearch(name),
+)
 
 fun MunicipalityEntity.toDomain() = ElectoralUnit(code = code, name = name, uf = uf, isMunicipality = true)
 
@@ -92,58 +93,6 @@ fun CandidateColumns.toCandidate(electionId: Long, id: Long) = Candidate(
 
 fun CandidateEntity.toDomain() = columns.toCandidate(electionId, id)
 
-fun CandidateDetail.toEntity() = CandidateDetailEntity(
-    electionId = candidate.electionId,
-    candidateId = candidate.id,
-    columns = candidate.toColumns(),
-    coalitionType = coalitionType,
-    coalitionComposition = coalitionComposition,
-    officialPageUrl = officialPageUrl,
-    photoPublishable = photoPublishable,
-    lastUpdate = lastUpdate?.toString(),
-)
-
-fun CandidateDetail.runningMateEntities() = runningMates.mapIndexed { position, mate ->
-    RunningMateEntity(
-        electionId = candidate.electionId,
-        candidateId = candidate.id,
-        position = position,
-        mateId = mate.id,
-        role = mate.role,
-        ballotName = mate.ballotName,
-        fullName = mate.fullName,
-        partyAcronym = mate.partyAcronym,
-        photoUrl = mate.photoUrl,
-        status = mate.status,
-    )
-}
-
-fun CandidateDetailEntity.toDomain(runningMates: List<RunningMateEntity>) = CandidateDetail(
-    candidate = columns.toCandidate(electionId, candidateId),
-    coalitionType = coalitionType,
-    coalitionComposition = coalitionComposition,
-    runningMates = runningMates.sortedBy { it.position }.map {
-        RunningMate(
-            id = it.mateId,
-            role = it.role,
-            ballotName = it.ballotName,
-            fullName = it.fullName,
-            partyAcronym = it.partyAcronym,
-            photoUrl = it.photoUrl,
-            status = it.status,
-        )
-    },
-    officialPageUrl = officialPageUrl,
-    photoPublishable = photoPublishable,
-    lastUpdate = lastUpdate?.let {
-        try {
-            LocalDateTime.parse(it)
-        } catch (e: DateTimeParseException) {
-            null
-        }
-    },
-)
-
 /** Stored source name back to the enum; unknown values (older app versions) are the primary. */
 fun dataSourceOf(name: String?): DataSource =
     DataSource.entries.firstOrNull { it.name == name } ?: DataSource.DIVULGA_CAND_CONTAS
@@ -161,6 +110,7 @@ object AppErrorCodec {
     private const val NOT_FOUND = "not_found"
     private const val SERVER = "server:"
     private const val PARSING = "parsing"
+    private const val STORAGE = "storage"
     private const val UNKNOWN = "unknown"
     private const val DEFAULT_SERVER_CODE = 500
 
@@ -170,6 +120,7 @@ object AppErrorCodec {
         AppError.NotFound -> NOT_FOUND
         is AppError.Server -> SERVER + error.httpCode
         AppError.Parsing -> PARSING
+        AppError.Storage -> STORAGE
         is AppError.Unknown -> UNKNOWN
     }
 
@@ -179,6 +130,7 @@ object AppErrorCodec {
         code == NOT_FOUND -> AppError.NotFound
         code.startsWith(SERVER) -> AppError.Server(code.removePrefix(SERVER).toIntOrNull() ?: DEFAULT_SERVER_CODE)
         code == PARSING -> AppError.Parsing
+        code == STORAGE -> AppError.Storage
         else -> AppError.Unknown(null)
     }
 }

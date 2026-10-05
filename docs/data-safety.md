@@ -7,8 +7,9 @@ do Google pedir.
 
 Os rótulos estão em português, com o texto da interface em inglês entre parênteses, porque a tradução
 do Play Console muda com o tempo. O formulário é obrigatório mesmo para apps que não coletam nada, e
-a política de privacidade (`docs/privacidade/`) precisa estar publicada e informada em
-Conteúdo do app > Política de privacidade.
+a política de privacidade precisa estar publicada em <https://veronezzi.github.io/cola-eleitoral-privacidade/>
+(`PUBLICACAO.md`, seção 7) e informada em Conteúdo do app > Política de privacidade. As respostas
+abaixo dizem o mesmo que a política (`privacidade.md`, seções 2 a 5).
 
 ## Definições do Google que sustentam a resposta
 
@@ -49,16 +50,19 @@ coletado". Confira e clique em Enviar (Submit).
 | Fluxo de dados | Por que não é coleta nem compartilhamento declarável |
 |---|---|
 | Escolhas de candidatos, local de votação e preferências | Ficam só no aparelho (arquivo cifrado e preferências privadas, fora do backup). Processamento local, que o Google exclui da declaração. |
-| Consulta ao TSE: código da UF ou do município, cargo e identificador da candidatura no caminho da URL | É um pedido de informação pública feito pelo usuário diretamente à fonte oficial, como abrir uma página no navegador. O desenvolvedor não recebe nada: não há servidor do projeto. O código enviado é o do local de votação escolhido pelo usuário (pode ser qualquer UF ou município), não a localização física do aparelho, e o app não tem permissão de localização. O TSE não é provedor de serviço do desenvolvedor; mesmo numa leitura ampla, o envio ao TSE se encaixaria na exceção de ação iniciada pelo usuário, que espera que a consulta vá ao TSE (o app diz isso no aviso inicial, em Sobre e na política). |
+| Cópia local dos dados públicos (listas em cache; detalhes, vices e fotos só na memória) | Dado público recebido do TSE e processado só no aparelho; apagado depois de 60 dias sem uso ou pelo usuário. |
+| Consulta ao DivulgaCandContas (`divulgacandcontas.tse.jus.br`): eleição, código da UF ou do município, cargo e identificador da candidatura no caminho da URL | É um pedido de informação pública feito pelo usuário diretamente à fonte oficial, como abrir uma página no navegador. O desenvolvedor não recebe nada: não há servidor do projeto. O código enviado é o do local de votação escolhido pelo usuário (pode ser qualquer UF ou município), não a localização física do aparelho, e o app não tem permissão de localização. O TSE não é provedor de serviço do desenvolvedor; mesmo numa leitura ampla, o envio ao TSE se encaixaria na exceção de ação iniciada pelo usuário, que espera que a consulta vá ao TSE (o app diz isso no aviso inicial, em Sobre e na política). |
+| Download dos dados abertos (`cdn.tse.jus.br`), só quando o DivulgaCandContas recusa | O pedido é o arquivo nacional da eleição, igual para todos, mais o `ETag` da cópia que o app já tem: não leva local, cargo nem candidatura. O app guarda só os dados que as listas mostram, sem CPF, título, e-mail ou data de nascimento dos candidatos; o ZIP original nunca é gravado. |
 | Endereço IP visto pelo TSE e pela CDN que ele usa | Consequência de qualquer conexão à internet; o app não lê, não guarda e não envia o IP como dado. |
-| Cabeçalho `User-Agent` (versão do app e do Android) | Não identifica a pessoa nem o aparelho; não é um dos tipos de dados do formulário. |
-| Fotos de candidatos baixadas do TSE | Dado público recebido, não enviado. |
+| Cabeçalho `User-Agent` (`ColaEleitoral/<versão> (Android <versão>; +<URL da política>)`) | Nome e versão do app, versão do Android e endereço da política. Não identifica a pessoa nem o aparelho; não é um dos tipos de dados do formulário. |
+| Fotos de candidatos baixadas do TSE | Dado público recebido, não enviado, e mantido só na memória. O pedido da foto leva o identificador da candidatura, como a consulta do detalhe (ver a leitura estrita no fim). |
 | Imagem ou PDF da cola compartilhados | Criados e enviados pelo próprio usuário, pelo compartilhamento ou pela impressão do Android, para o destino que ele escolhe. O app não transmite nada por conta própria. |
 | Estatísticas e relatórios de falhas do Google Play (Android vitals) | Coletados pelo Android e pelo Google Play conforme a configuração do usuário, não pelo código do app. O app não tem SDK de analytics nem de falhas. |
 | Lembrete do dia da eleição | Agendado localmente (WorkManager); não há servidor de notificações. |
 
 **Condição para manter esta resposta:** nenhuma versão pode adicionar SDK com rede (analytics,
-falhas, anúncios, Firebase), servidor próprio, login ou envio de escolhas. Qualquer mudança assim
+falhas, anúncios, Firebase), servidor próprio, login, envio de escolhas ou outro host além dos dois
+do TSE. Qualquer mudança assim
 exige atualizar este formulário e a política de privacidade antes de publicar a versão.
 
 **Risco residual:** a definição de coleta do Google é ampla ("transmitir dados para fora do

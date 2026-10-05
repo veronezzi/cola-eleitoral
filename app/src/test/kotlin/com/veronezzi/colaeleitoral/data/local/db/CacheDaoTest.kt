@@ -61,30 +61,6 @@ class CacheDaoTest {
     }
 
     @Test
-    fun detailAndRunningMatesAreStoredTogether() = runTest {
-        val dao = db.candidateDetailDao()
-        dao.insert(
-            CandidateDetailEntity(
-                electionId = ELECTION,
-                candidateId = 1,
-                columns = columns("BR", 1),
-                coalitionType = "Coligação",
-                coalitionComposition = null,
-                officialPageUrl = "https://divulgacandcontas.tse.jus.br/divulga/",
-                photoPublishable = true,
-                lastUpdate = "2026-09-18T14:39",
-            ),
-        )
-        dao.insertRunningMates(listOf(mate(1, "2º Suplente"), mate(0, "1º Suplente")))
-
-        assertEquals("Coligação", dao.observe(ELECTION, 1).first()?.coalitionType)
-        assertEquals(listOf("1º Suplente", "2º Suplente"), dao.observeRunningMates(ELECTION, 1).first().map { it.role })
-        dao.deleteRunningMates(ELECTION, 1)
-        assertTrue(dao.observeRunningMates(ELECTION, 1).first().isEmpty())
-        assertNull(dao.observe(ELECTION, 2).first())
-    }
-
-    @Test
     fun fetchStateIsUpserted() = runTest {
         val dao = db.fetchStateDao()
         dao.upsert(FetchStateEntity("elections", fetchedAt = 1, lastAttemptAt = 1, lastError = null, source = "DIVULGA_CAND_CONTAS"))
@@ -99,7 +75,7 @@ class CacheDaoTest {
     @Test
     fun electionsAndMunicipalitiesRoundTrip() = runTest {
         db.electionDao().insertAll(listOf(ElectionEntity(20322002026, 2026, "Eleição Geral Federal 2026", "GENERAL", null, "2026-10-04")))
-        db.municipalityDao().insertAll(listOf(MunicipalityEntity("01120", "AC", "ACRELÂNDIA", 2045202024)))
+        db.municipalityDao().insertAll(listOf(MunicipalityEntity("01120", "AC", "ACRELÂNDIA", 2045202024, searchKey = "acrelandia")))
 
         assertEquals(20322002026L, db.electionDao().observe(20322002026).first()?.id)
         assertEquals("01120", db.municipalityDao().observeByUf("AC").first().single().code)
@@ -126,19 +102,6 @@ class CacheDaoTest {
 
     private fun candidate(id: Long, ueCode: String, officeCode: Int, electionId: Long = ELECTION, registration: String = "Deferido") =
         CandidateEntity(electionId, id, columns(ueCode, officeCode, registration))
-
-    private fun mate(position: Int, role: String) = RunningMateEntity(
-        electionId = ELECTION,
-        candidateId = 1,
-        position = position,
-        mateId = null,
-        role = role,
-        ballotName = "SUPLENTE $position",
-        fullName = null,
-        partyAcronym = null,
-        photoUrl = null,
-        status = null,
-    )
 
     private companion object {
         const val ELECTION = 20322002026L

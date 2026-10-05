@@ -1,0 +1,307 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "3ea13ce957396c370ebb99bf9fc5d571",
+    "entities": [
+      {
+        "tableName": "elections",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `year` INTEGER NOT NULL, `name` TEXT NOT NULL, `scope` TEXT NOT NULL, `round` INTEGER, `date` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "year",
+            "columnName": "year",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scope",
+            "columnName": "scope",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "round",
+            "columnName": "round",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "date",
+            "columnName": "date",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "municipalities",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`code` TEXT NOT NULL, `uf` TEXT NOT NULL, `name` TEXT NOT NULL, `sourceElectionId` INTEGER NOT NULL, `searchKey` TEXT NOT NULL, PRIMARY KEY(`code`))",
+        "fields": [
+          {
+            "fieldPath": "code",
+            "columnName": "code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "uf",
+            "columnName": "uf",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceElectionId",
+            "columnName": "sourceElectionId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "searchKey",
+            "columnName": "searchKey",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "code"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_municipalities_uf",
+            "unique": false,
+            "columnNames": [
+              "uf"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_municipalities_uf` ON `${TABLE_NAME}` (`uf`)"
+          }
+        ]
+      },
+      {
+        "tableName": "offices",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`electionId` INTEGER NOT NULL, `ueCode` TEXT NOT NULL, `code` INTEGER NOT NULL, `name` TEXT NOT NULL, `candidateCount` INTEGER, PRIMARY KEY(`electionId`, `ueCode`, `code`))",
+        "fields": [
+          {
+            "fieldPath": "electionId",
+            "columnName": "electionId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ueCode",
+            "columnName": "ueCode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "code",
+            "columnName": "code",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "candidateCount",
+            "columnName": "candidateCount",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "electionId",
+            "ueCode",
+            "code"
+          ]
+        }
+      },
+      {
+        "tableName": "candidates",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`electionId` INTEGER NOT NULL, `id` INTEGER NOT NULL, `ueCode` TEXT NOT NULL, `officeCode` INTEGER NOT NULL, `number` INTEGER NOT NULL, `ballotName` TEXT NOT NULL, `fullName` TEXT, `partyAcronym` TEXT NOT NULL, `partyNumber` INTEGER, `partyName` TEXT, `coalition` TEXT, `registrationStatus` TEXT NOT NULL, `totalizationStatus` TEXT, `onBallotStatus` TEXT, `isFit` INTEGER, `photoUrl` TEXT, PRIMARY KEY(`electionId`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "electionId",
+            "columnName": "electionId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "columns.ueCode",
+            "columnName": "ueCode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "columns.officeCode",
+            "columnName": "officeCode",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "columns.number",
+            "columnName": "number",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "columns.ballotName",
+            "columnName": "ballotName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "columns.fullName",
+            "columnName": "fullName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "columns.partyAcronym",
+            "columnName": "partyAcronym",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "columns.partyNumber",
+            "columnName": "partyNumber",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "columns.partyName",
+            "columnName": "partyName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "columns.coalition",
+            "columnName": "coalition",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "columns.registrationStatus",
+            "columnName": "registrationStatus",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "columns.totalizationStatus",
+            "columnName": "totalizationStatus",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "columns.onBallotStatus",
+            "columnName": "onBallotStatus",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "columns.isFit",
+            "columnName": "isFit",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "columns.photoUrl",
+            "columnName": "photoUrl",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "electionId",
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_candidates_electionId_ueCode_officeCode",
+            "unique": false,
+            "columnNames": [
+              "electionId",
+              "ueCode",
+              "officeCode"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_candidates_electionId_ueCode_officeCode` ON `${TABLE_NAME}` (`electionId`, `ueCode`, `officeCode`)"
+          }
+        ]
+      },
+      {
+        "tableName": "fetch_state",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`fetchKey` TEXT NOT NULL, `fetchedAt` INTEGER, `lastAttemptAt` INTEGER, `lastError` TEXT, `source` TEXT, PRIMARY KEY(`fetchKey`))",
+        "fields": [
+          {
+            "fieldPath": "fetchKey",
+            "columnName": "fetchKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAt",
+            "columnName": "fetchedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastAttemptAt",
+            "columnName": "lastAttemptAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastError",
+            "columnName": "lastError",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "fetchKey"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3ea13ce957396c370ebb99bf9fc5d571')"
+    ]
+  }
+}

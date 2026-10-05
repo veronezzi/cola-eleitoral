@@ -25,6 +25,20 @@ object TseEndpoints {
 
     val ALLOWED_HOSTS: Set<String> = setOf(API_HOST, OPEN_DATA_HOST)
 
-    /** Honest User-Agent: the app's own name and version, never a browser's. */
-    fun userAgent(versionName: String): String = "ColaEleitoral/$versionName (Android)"
+    /**
+     * Honest User-Agent (ARCHITECTURE.md 2.7): the app's name and version, the Android release and
+     * where to read about the app, never a browser's.
+     * Example: `ColaEleitoral/1.0.0 (Android 14; +https://veronezzi.github.io/cola-eleitoral-privacidade/)`.
+     */
+    fun userAgent(versionName: String, androidRelease: String, privacyPolicyUrl: String): String =
+        "ColaEleitoral/${token(versionName)} (Android ${token(androidRelease)}; +${privacyPolicyUrl.filter(::isUrlChar)})"
+
+    /** Header values must be printable ASCII; a custom ROM may report anything as its release. */
+    private fun token(text: String): String = text.filter { it.isLetterOrDigit() && it.code < ASCII_LIMIT || it in "._-" }
+        .ifEmpty { "unknown" }
+
+    private fun isUrlChar(c: Char): Boolean = c.code in ASCII_PRINTABLE && c !in " ()<>\";\\"
+
+    private const val ASCII_LIMIT = 128
+    private val ASCII_PRINTABLE = 0x21..0x7E
 }

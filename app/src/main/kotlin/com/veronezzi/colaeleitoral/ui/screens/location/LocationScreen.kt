@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Search
@@ -24,15 +23,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -40,10 +41,13 @@ import com.veronezzi.colaeleitoral.R
 import com.veronezzi.colaeleitoral.domain.model.ElectoralUnit
 import com.veronezzi.colaeleitoral.domain.model.FederativeUnits
 import com.veronezzi.colaeleitoral.ui.common.LoadState
+import com.veronezzi.colaeleitoral.ui.common.presentation
 import com.veronezzi.colaeleitoral.ui.components.AppTopBar
 import com.veronezzi.colaeleitoral.ui.components.ErrorState
 import com.veronezzi.colaeleitoral.ui.components.ListSkeleton
 import com.veronezzi.colaeleitoral.ui.components.MessageState
+import com.veronezzi.colaeleitoral.ui.components.NoPersonalizedLearning
+import com.veronezzi.colaeleitoral.ui.components.PrivateSearchKeyboardOptions
 import com.veronezzi.colaeleitoral.ui.components.ScreenPreviews
 import com.veronezzi.colaeleitoral.ui.navigation.LocationRoute
 import com.veronezzi.colaeleitoral.ui.theme.ColaEleitoralTheme
@@ -62,18 +66,22 @@ fun LocationRouteScreen(
     BackHandler(enabled = state.step == LocationStep.MUNICIPALITY) { viewModel.onBackToUf() }
     LocationScreen(
         state = state,
+        query = viewModel.query,
         onBack = if (state.step == LocationStep.MUNICIPALITY) viewModel::onBackToUf else onBack.takeIf { route.fromSettings },
         onUfSelected = viewModel::onUfSelected,
         onQueryChange = viewModel::onQueryChange,
         onMunicipalitySelected = viewModel::onMunicipalitySelected,
         onSkipMunicipality = viewModel::onSkipMunicipality,
         onRetry = viewModel::onRetry,
+        onSaveErrorShown = viewModel::onSaveErrorShown,
     )
 }
 
+/** @param query text of the municipality search, read from the ViewModel's Compose state. */
 @Composable
 fun LocationScreen(
     state: LocationUiState,
+    query: String,
     onBack: (() -> Unit)?,
     onUfSelected: (String) -> Unit,
     onQueryChange: (String) -> Unit,
@@ -81,10 +89,20 @@ fun LocationScreen(
     onSkipMunicipality: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
+    onSaveErrorShown: () -> Unit = {},
 ) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    state.saveError?.let { error ->
+        val text = stringResource(error.presentation().message)
+        LaunchedEffect(error) {
+            snackbarHostState.showSnackbar(text, withDismissAction = true)
+            onSaveErrorShown()
+        }
+    }
     Scaffold(
         modifier = modifier,
         topBar = { AppTopBar(title = stringResource(R.string.location_title), onBack = onBack) },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         Box(
             modifier = Modifier
@@ -98,6 +116,7 @@ fun LocationScreen(
                     LocationStep.UF -> UfList(state = state, onUfSelected = onUfSelected)
                     LocationStep.MUNICIPALITY -> MunicipalityStep(
                         state = state,
+                        query = query,
                         onQueryChange = onQueryChange,
                         onMunicipalitySelected = onMunicipalitySelected,
                         onSkip = onSkipMunicipality,
@@ -143,6 +162,7 @@ private fun UfList(state: LocationUiState, onUfSelected: (String) -> Unit) {
 @Composable
 private fun MunicipalityStep(
     state: LocationUiState,
+    query: String,
     onQueryChange: (String) -> Unit,
     onMunicipalitySelected: (ElectoralUnit) -> Unit,
     onSkip: () -> Unit,
@@ -159,15 +179,17 @@ private fun MunicipalityStep(
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(vertical = 12.dp),
             )
-            OutlinedTextField(
-                value = state.query,
-                onValueChange = onQueryChange,
-                label = { Text(stringResource(R.string.location_search_label)) },
-                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                modifier = Modifier.fillMaxWidth(),
-            )
+            NoPersonalizedLearning {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    label = { Text(stringResource(R.string.location_search_label)) },
+                    leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                    singleLine = true,
+                    keyboardOptions = PrivateSearchKeyboardOptions,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             if (!state.municipalityRequired) {
                 OutlinedButton(
                     onClick = onSkip,
@@ -243,6 +265,7 @@ private fun LocationScreenPreview() {
                 ),
                 municipalitiesLoad = LoadState.Loaded,
             ),
+            query = "",
             onBack = {},
             onUfSelected = {},
             onQueryChange = {},

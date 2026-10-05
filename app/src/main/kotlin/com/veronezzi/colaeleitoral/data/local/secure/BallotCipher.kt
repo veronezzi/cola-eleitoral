@@ -22,7 +22,8 @@ interface BallotCipher {
 
     /**
      * Inverse of [encrypt]. Throws [BallotKeyInvalidatedException] when the key is missing or was
-     * permanently invalidated, and another [GeneralSecurityException] when the data was altered.
+     * permanently invalidated and `AEADBadTagException` when the data was altered or truncated;
+     * any other [GeneralSecurityException] or `ProviderException` is treated as transient.
      */
     fun decrypt(sealed: ByteArray, associatedData: ByteArray): ByteArray
 

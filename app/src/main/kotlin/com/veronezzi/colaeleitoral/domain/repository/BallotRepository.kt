@@ -23,6 +23,17 @@ interface BallotRepository {
     /** Clears the [observePicksLost] flag once the user has seen the notice. */
     suspend fun acknowledgePicksLost() {}
 
+    /**
+     * True while the saved picks exist but can't be read right now (a transient Keystore or I/O
+     * failure, typically just after boot). Nothing was deleted: [observeBallot] keeps its last
+     * value (empty if nothing was read yet) and the UI shows a non-destructive banner with a
+     * retry that calls [retryRead]. Becomes false again once a read succeeds.
+     */
+    fun observeUnavailable(): Flow<Boolean> = flowOf(false)
+
+    /** Tries to read the saved picks again after [observeUnavailable] reported true. */
+    suspend fun retryRead() {}
+
     /** Picks of one election round, in urna order then slot. */
     fun observeBallot(electionId: Long, round: Round): Flow<List<BallotPick>>
 

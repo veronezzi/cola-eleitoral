@@ -27,11 +27,13 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Opcionais: substituem colaEleitoral.privacyPolicyUrl e colaEleitoral.contactEmail de
-  # gradle.properties. Não são segredos (aparecem no app e na loja): use variáveis do repositório;
-  # segredos com o mesmo nome também funcionam. Vazias = valem os de gradle.properties.
+  # Opcionais: substituem colaEleitoral.privacyPolicyUrl, colaEleitoral.contactEmail e
+  # colaEleitoral.developerName de gradle.properties. Não são segredos (aparecem no app e na loja):
+  # use variáveis do repositório; segredos com o mesmo nome também funcionam. Vazias = valem os de
+  # gradle.properties. scripts/check-store-metadata.sh lê as mesmas variáveis.
   COLA_ELEITORAL_PRIVACY_POLICY_URL: ${{ vars.COLA_ELEITORAL_PRIVACY_POLICY_URL || secrets.COLA_ELEITORAL_PRIVACY_POLICY_URL }}
   COLA_ELEITORAL_CONTACT_EMAIL: ${{ vars.COLA_ELEITORAL_CONTACT_EMAIL || secrets.COLA_ELEITORAL_CONTACT_EMAIL }}
+  COLA_ELEITORAL_DEVELOPER_NAME: ${{ vars.COLA_ELEITORAL_DEVELOPER_NAME || secrets.COLA_ELEITORAL_DEVELOPER_NAME }}
 
 jobs:
   verify:
@@ -42,7 +44,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Ficha da loja e política de privacidade prontas
+      - name: Ficha da loja e política de privacidade prontas e publicadas
+        # Também confere se a URL da política responde e se a página publicada é igual a
+        # docs/privacidade/index.html (gerado de docs/privacidade.md, o texto embutido no app).
         run: scripts/check-store-metadata.sh --release
 
       - name: JDKs 21 e 17 (Temurin)
@@ -63,6 +67,7 @@ jobs:
           args=()
           if [ -n "$COLA_ELEITORAL_PRIVACY_POLICY_URL" ]; then args+=("-PcolaEleitoral.privacyPolicyUrl=$COLA_ELEITORAL_PRIVACY_POLICY_URL"); fi
           if [ -n "$COLA_ELEITORAL_CONTACT_EMAIL" ]; then args+=("-PcolaEleitoral.contactEmail=$COLA_ELEITORAL_CONTACT_EMAIL"); fi
+          if [ -n "$COLA_ELEITORAL_DEVELOPER_NAME" ]; then args+=("-PcolaEleitoral.developerName=$COLA_ELEITORAL_DEVELOPER_NAME"); fi
           ./gradlew "${args[@]}" lint testDebugUnitTest
 
       - name: Publicar relatórios do lint e dos testes
@@ -164,11 +169,12 @@ jobs:
           COLA_ELEITORAL_KEY_ALIAS: ${{ secrets.COLA_ELEITORAL_KEY_ALIAS }}
           COLA_ELEITORAL_KEY_PASSWORD: ${{ secrets.COLA_ELEITORAL_KEY_PASSWORD }}
         run: |
-          # A trava de release do app/build.gradle.kts falha aqui se a URL da política ou o e-mail
-          # ainda forem marcadores example.com.
+          # A trava de release do app/build.gradle.kts falha aqui se a URL da política, o e-mail ou o
+          # nome do desenvolvedor ainda forem marcadores.
           args=()
           if [ -n "$COLA_ELEITORAL_PRIVACY_POLICY_URL" ]; then args+=("-PcolaEleitoral.privacyPolicyUrl=$COLA_ELEITORAL_PRIVACY_POLICY_URL"); fi
           if [ -n "$COLA_ELEITORAL_CONTACT_EMAIL" ]; then args+=("-PcolaEleitoral.contactEmail=$COLA_ELEITORAL_CONTACT_EMAIL"); fi
+          if [ -n "$COLA_ELEITORAL_DEVELOPER_NAME" ]; then args+=("-PcolaEleitoral.developerName=$COLA_ELEITORAL_DEVELOPER_NAME"); fi
           ./gradlew "${args[@]}" bundleRelease
 
       - name: Conferir a assinatura do AAB

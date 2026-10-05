@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -36,11 +37,11 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -60,12 +61,12 @@ import com.veronezzi.colaeleitoral.ui.common.slotLabel
 import com.veronezzi.colaeleitoral.ui.common.spokenDigits
 import com.veronezzi.colaeleitoral.ui.components.AppTopBar
 import com.veronezzi.colaeleitoral.ui.components.ListSkeleton
+import com.veronezzi.colaeleitoral.ui.components.PicksUnavailableBanner
 import com.veronezzi.colaeleitoral.ui.components.ScreenPreviews
 import com.veronezzi.colaeleitoral.ui.navigation.ColaExportRoute
 import com.veronezzi.colaeleitoral.ui.preview.PreviewData
 import com.veronezzi.colaeleitoral.ui.theme.ColaEleitoralTheme
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -75,7 +76,15 @@ fun ColaExportRouteScreen(
     viewModel: ColaExportViewModel = hiltViewModel<ColaExportViewModel, ColaExportViewModel.Factory> { it.create(route) },
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    ColaExportScreen(state = state, onBack = onBack, onShowNamesChange = viewModel::onShowNamesChange)
+    ColaExportScreen(
+        state = state,
+        onBack = onBack,
+        onShowNamesChange = viewModel::onShowNamesChange,
+        onShareConfirmed = viewModel::onShareConfirmed,
+        onShareHandled = viewModel::onShareHandled,
+        onMessageShown = viewModel::onMessageShown,
+        onRetryRead = viewModel::onRetryRead,
+    )
 }
 
 /** Builds the localized [ColaContent] of [state]. */
@@ -102,22 +111,44 @@ fun rememberColaContent(state: ColaUiState): ColaContent {
     return remember(title, lines, footer) { ColaContent(title, lines, footer) }
 }
 
+/**
+ * The cola to print or share. Sharing asks first (the image shows the picks), then the ViewModel
+ * writes the PNG off the main thread; [ColaUiState.shareFile] opens the share sheet once and
+ * [onShareHandled] reports whether some app received it.
+ */
 @Composable
 fun ColaExportScreen(
     state: ColaUiState,
     onBack: () -> Unit,
     onShowNamesChange: (Boolean) -> Unit,
+    onShareConfirmed: (ColaContent) -> Unit,
+    onShareHandled: (delivered: Boolean) -> Unit,
+    onMessageShown: () -> Unit,
     modifier: Modifier = Modifier,
+    onRetryRead: () -> Unit = {},
 ) {
     SecureScreen()
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     var confirmShare by rememberSaveable { mutableStateOf(false) }
     val content = rememberColaContent(state)
     val jobName = stringResource(R.string.cola_print_job)
     val chooserTitle = stringResource(R.string.cola_share_chooser)
-    val shareFailed = stringResource(R.string.cola_share_failed)
+    state.shareFile?.let { file ->
+        LaunchedEffect(file) { onShareHandled(ColaExport.share(context, file, chooserTitle)) }
+    }
+    state.message?.let { message ->
+        val text = stringResource(
+            when (message) {
+                ColaMessage.ImageFailed -> R.string.cola_image_failed
+                ColaMessage.ShareUnavailable -> R.string.cola_share_failed
+            },
+        )
+        LaunchedEffect(message) {
+            snackbarHostState.showSnackbar(text, withDismissAction = true)
+            onMessageShown()
+        }
+    }
     val preview by produceState<Bitmap?>(initialValue = null, content) {
         value = withContext(Dispatchers.Default) { ColaRenderer().renderBitmap(content) }
     }
@@ -151,6 +182,7 @@ fun ColaExportScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                if (state.picksUnavailable) PicksUnavailableBanner(onRetry = onRetryRead, outerPadding = PaddingValues())
                 Text(text = stringResource(R.string.cola_intro), style = MaterialTheme.typography.bodyLarge)
                 Box(
                     modifier = Modifier
@@ -192,10 +224,14 @@ fun ColaExportScreen(
                     Spacer(Modifier.width(ButtonDefaults.IconSpacing))
                     Text(stringResource(R.string.cola_print))
                 }
-                OutlinedButton(onClick = { confirmShare = true }, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = { confirmShare = true },
+                    enabled = !state.isExporting,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     Icon(Icons.Outlined.Share, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
                     Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    Text(stringResource(R.string.cola_share))
+                    Text(stringResource(if (state.isExporting) R.string.cola_preparing_image else R.string.cola_share))
                 }
                 Text(
                     text = stringResource(R.string.cola_booth_hint),
@@ -216,10 +252,7 @@ fun ColaExportScreen(
                 TextButton(
                     onClick = {
                         confirmShare = false
-                        scope.launch {
-                            val file = withContext(Dispatchers.IO) { ColaExport.writeImage(context, content) }
-                            if (!ColaExport.share(context, file, chooserTitle)) snackbarHostState.showSnackbar(shareFailed)
-                        }
+                        onShareConfirmed(content)
                     },
                 ) { Text(stringResource(R.string.cola_share_confirm)) }
             },
@@ -241,6 +274,9 @@ private fun ColaExportPreview() {
             ),
             onBack = {},
             onShowNamesChange = {},
+            onShareConfirmed = {},
+            onShareHandled = {},
+            onMessageShown = {},
         )
     }
 }

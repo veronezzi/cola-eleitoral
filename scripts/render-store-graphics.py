@@ -9,12 +9,13 @@ Saídas (em fastlane/metadata/android/pt-BR/images/):
                       desenho de uma cola com caixas de dígitos vazias (nenhum número ou nome).
 
 As camadas vêm de app/src/main/res/drawable/ic_launcher_{background,foreground}.xml e as cores de
-res/values/ic_launcher_colors.xml; o nome do app vem de res/values/strings.xml (app_name). Mudou o
-ícone ou o nome? Rode de novo e confira com scripts/check-store-metadata.sh.
+res/values/ic_launcher_colors.xml; o nome do app vem de res/values/strings.xml (app_name), ou de
+--title. Mudou o ícone ou o nome? Rode de novo e confira com scripts/check-store-metadata.sh.
 
 Uso:
   pip install pillow cairosvg
-  python3 scripts/render-store-graphics.py [--font-regular TTF --font-bold TTF] [--preview DIR]
+  python3 scripts/render-store-graphics.py [--font-regular TTF --font-bold TTF] [--title NOME]
+                                           [--tagline FRASE] [--preview DIR]
 
 As imagens versionadas foram geradas com Roboto (Google Fonts, licença SIL OFL 1.1). Sem
 --font-*, o script procura Roboto pelo fontconfig e cai para DejaVu Sans.
@@ -44,7 +45,7 @@ RES = ROOT / "app/src/main/res"
 OUT = ROOT / "fastlane/metadata/android/pt-BR/images"
 ANDROID = "{http://schemas.android.com/apk/res/android}"
 
-DEFAULT_TAGLINE = "Monte sua cola eleitoral\npara levar no papel"
+DEFAULT_TAGLINE = "Sua cola na ordem da urna,\npara levar no papel"
 
 
 # --------------------------------------------------------------------------- VectorDrawable -> SVG
@@ -235,7 +236,7 @@ def wrap(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
     return lines
 
 
-def render_feature_graphic(tagline: str, regular: str, bold: str) -> Image.Image:
+def render_feature_graphic(title: str, tagline: str, regular: str, bold: str) -> Image.Image:
     colors = load_colors()
     background, _ = parse_color("@color/ic_launcher_background", colors)
     width, height = 1024, 500
@@ -252,7 +253,6 @@ def render_feature_graphic(tagline: str, regular: str, bold: str) -> Image.Image
     title_font = ImageFont.truetype(bold, 76)
     tagline_font = ImageFont.truetype(regular, 38)
     left, max_text = 72, 540
-    title = app_name()
     title_lines = wrap(title, title_font, max_text)
     tagline_lines = wrap(tagline, tagline_font, max_text)
     title_h, tagline_h, spacing = 90, 50, 26
@@ -300,6 +300,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--font-regular", help="TTF regular (padrao: Roboto pelo fontconfig)")
     parser.add_argument("--font-bold", help="TTF negrito (padrao: Roboto Bold pelo fontconfig)")
+    parser.add_argument("--title", help="nome na imagem de destaque (padrao: app_name de strings.xml)")
     parser.add_argument(
         "--tagline", default=DEFAULT_TAGLINE, help='frase da imagem de destaque ("\\n" quebra a linha)'
     )
@@ -310,7 +311,8 @@ def main() -> None:
     regular = find_font("regular", args.font_regular)
     bold = find_font("bold", args.font_bold)
     tagline = args.tagline.replace("\\n", "\n")
-    save_png(render_feature_graphic(tagline, regular, bold), OUT / "featureGraphic.png", "RGB")
+    title = args.title or app_name()
+    save_png(render_feature_graphic(title, tagline, regular, bold), OUT / "featureGraphic.png", "RGB")
     if args.preview:
         render_previews(args.preview)
         print(f"Previas em {args.preview}")

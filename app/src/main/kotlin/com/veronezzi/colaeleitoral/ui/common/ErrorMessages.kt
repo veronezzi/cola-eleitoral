@@ -63,6 +63,13 @@ fun AppError.presentation(hasCache: Boolean = false, aboutCandidate: Boolean = f
             canRetry = true,
             showOfficialSite = true,
         )
+        // Nothing reached the TSE: the official site would not help, freeing space might.
+        AppError.Storage -> ErrorPresentation(
+            title = R.string.error_storage_title,
+            message = R.string.error_storage_message,
+            canRetry = true,
+            showOfficialSite = false,
+        )
         is AppError.Unknown -> ErrorPresentation(
             title = R.string.error_unknown_title,
             message = R.string.error_unknown_message,
@@ -83,6 +90,7 @@ fun AppError.staleReason(): Int = when (this) {
     AppError.NotFound -> R.string.stale_reason_not_found
     is AppError.Server -> R.string.stale_reason_server
     AppError.Parsing -> R.string.stale_reason_parsing
+    AppError.Storage -> R.string.stale_reason_storage
     is AppError.Unknown -> R.string.stale_reason_unknown
 }
 

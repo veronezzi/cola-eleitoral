@@ -62,7 +62,10 @@ class DivulgaCandContasSourceTest {
 
         assertEquals(13, (first as AppResult.Success).value.size)
         val requests = routes.requests(ELECTIONS)
-        assertEquals("ColaEleitoral/${BuildConfig.VERSION_NAME} (Android)", requests[0].headers["User-Agent"])
+        assertEquals(
+            "ColaEleitoral/${BuildConfig.VERSION_NAME} (Android 14; +${BuildConfig.PRIVACY_POLICY_URL})",
+            requests[0].headers["User-Agent"],
+        )
         assertEquals("application/json", requests[0].headers["Accept"])
         assertNull("no cookie jar", requests[1].headers["Cookie"])
         assertNull(requests[0].headers["Referer"])

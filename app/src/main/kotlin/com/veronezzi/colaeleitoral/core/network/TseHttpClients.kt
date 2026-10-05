@@ -16,7 +16,7 @@ import kotlin.coroutines.resumeWithException
 /**
  * OkHttp clients (ARCHITECTURE.md 2.7). One base client, whose connection pool and dispatcher
  * (at most [MAX_REQUESTS_PER_HOST] parallel requests per host) are shared by the derived API and
- * open-data clients and can be shared by Coil. No cookies, no HTTP cache (Room is the cache) and
+ * open-data clients and by Coil ([PhotoImageLoader]). No cookies, no HTTP cache (Room is the cache) and
  * no response bodies in any log.
  */
 object TseHttpClients {
@@ -29,8 +29,8 @@ object TseHttpClients {
     private const val DOWNLOAD_CALL_TIMEOUT_SECONDS = 180L
 
     /**
-     * @param debugInterceptors network interceptors of the build type: HEADERS logging in debug
-     * builds, none in release (`BuildTypeNetworkInterceptors`).
+     * @param debugInterceptors network interceptors of the build type: BASIC logging (method, URL,
+     * status) in debug builds, none in release (`BuildTypeNetworkInterceptors`).
      */
     fun base(userAgent: String, allowedHosts: Set<String>, debugInterceptors: List<Interceptor>): OkHttpClient {
         val allowlist = HostAllowlistInterceptor(allowedHosts)

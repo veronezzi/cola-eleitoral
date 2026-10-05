@@ -5,14 +5,16 @@ import com.veronezzi.colaeleitoral.domain.model.CandidateStatus
 import com.veronezzi.colaeleitoral.domain.model.Election
 import com.veronezzi.colaeleitoral.domain.model.OfficeRules
 import com.veronezzi.colaeleitoral.domain.model.Party
-import java.io.IOException
+import com.veronezzi.colaeleitoral.core.network.TseUnexpectedFormatException
 import java.io.InputStream
 import java.io.InputStreamReader
+import java.io.OutputStream
+import java.io.Writer
 import java.nio.charset.Charset
 import java.nio.charset.UnsupportedCharsetException
 
 /** The open-data file does not have the columns the app needs (the TSE changed the layout). */
-class OpenDataFormatException(message: String) : IOException(message)
+class OpenDataFormatException(message: String) : TseUnexpectedFormatException(message)
 
 /** One `consulta_cand` row, reduced to public candidacy fields. */
 internal data class OpenDataCandidateRow(
@@ -44,6 +46,10 @@ internal data class OpenDataStatusRow(
  * Parses the TSE open-data CSVs (ARCHITECTURE.md 2.10). Only the columns listed here are read;
  * personal data columns (`NR_CPF_CANDIDATO`, `NR_TITULO_ELEITORAL_CANDIDATO`, `DS_EMAIL`,
  * `DT_NASCIMENTO`, gender, race, education...) are skipped while reading and never stored.
+ *
+ * Two steps: [reduceCandidates] / [reduceStatuses] run while the ZIP streams in and write the
+ * derived files, a UTF-8 CSV with only the kept columns (the only open data on disk, S5);
+ * [readCandidates] / [readStatuses] then read those files (or an original CSV, given its charset).
  */
 internal object OpenDataParser {
     /** The files are Latin-1; windows-1252 is a superset that also decodes typographic marks. */
@@ -83,10 +89,20 @@ internal object OpenDataParser {
     /** Markers the TSE uses for "no value". */
     private val MISSING = setOf("", "#NULO", "#NE", "#NULO#")
 
+    /** Charset of the derived files written by [reduceCandidates] and [reduceStatuses]. */
+    val DERIVED_CHARSET: Charset = Charsets.UTF_8
+
+    /** Writes the candidate columns of one `consulta_cand_{year}_{UE}.csv` (Latin-1) to [output]. */
+    fun reduceCandidates(input: InputStream, output: OutputStream) =
+        reduce(input, output, CANDIDATE_COLUMNS, REQUIRED_CANDIDATE_COLUMNS)
+
+    /** Writes the status columns of one `consulta_cand_complementar_{year}_{UE}.csv` to [output]. */
+    fun reduceStatuses(input: InputStream, output: OutputStream) = reduce(input, output, STATUS_COLUMNS, setOf(SQ_CANDIDATO))
+
     /** Every row of one `consulta_cand_{year}_{UE}.csv`. Rows without the required fields are dropped. */
-    fun readCandidates(input: InputStream): List<OpenDataCandidateRow> {
+    fun readCandidates(input: InputStream, charset: Charset = CHARSET): List<OpenDataCandidateRow> {
         val rows = mutableListOf<OpenDataCandidateRow>()
-        readTable(input, CANDIDATE_COLUMNS, REQUIRED_CANDIDATE_COLUMNS) { value ->
+        readTable(input, charset, CANDIDATE_COLUMNS, REQUIRED_CANDIDATE_COLUMNS) { value ->
             val id = value(SQ_CANDIDATO)?.toLongOrNull()
             val office = value(CD_CARGO)?.toIntOrNull()
             val number = value(NR_CANDIDATO)?.toIntOrNull()?.takeIf { it > 0 }
@@ -120,9 +136,9 @@ internal object OpenDataParser {
      * Status columns of one `consulta_cand_complementar_{year}_{UE}.csv`, for the candidacies in
      * [wanted]. A candidacy listed twice (one row per round) keeps the first value of each column.
      */
-    fun readStatuses(input: InputStream, wanted: Set<Long>): Map<Long, OpenDataStatusRow> {
+    fun readStatuses(input: InputStream, wanted: Set<Long>, charset: Charset = CHARSET): Map<Long, OpenDataStatusRow> {
         val statuses = HashMap<Long, OpenDataStatusRow>()
-        readTable(input, STATUS_COLUMNS, setOf(SQ_CANDIDATO)) { value ->
+        readTable(input, charset, STATUS_COLUMNS, setOf(SQ_CANDIDATO)) { value ->
             val id = value(SQ_CANDIDATO)?.toLongOrNull()
             if (id != null && id in wanted) {
                 val row = OpenDataStatusRow(value(DS_SITUACAO_JULGAMENTO), value(DS_SITUACAO_CANDIDATO_TOT))
@@ -140,18 +156,55 @@ internal object OpenDataParser {
         return statuses
     }
 
-    private inline fun readTable(
-        input: InputStream,
-        columns: Set<String>,
-        required: Set<String>,
-        onRow: ((String) -> String?) -> Unit,
-    ) {
+    /**
+     * Copies the [columns] of a TSE CSV to [output] as UTF-8, every field quoted, header first.
+     * The other columns are skipped character by character and never materialized.
+     */
+    private fun reduce(input: InputStream, output: OutputStream, columns: Set<String>, required: Set<String>) {
         val reader = SemicolonCsvReader(InputStreamReader(input, CHARSET))
         val header = reader.readHeader() ?: return
+        val indexOf = columnIndexes(header, columns, required)
+        val kept = indexOf.entries.sortedBy { it.value }
+        val position = IntArray(header.size) { -1 }
+        kept.forEachIndexed { i, (_, index) -> position[index] = i }
+        val values = arrayOfNulls<String>(kept.size)
+        val writer = output.bufferedWriter(DERIVED_CHARSET)
+        writer.writeRecord(kept.map { it.key })
+        while (reader.readRecord({ it < position.size && position[it] >= 0 }) { index, text -> values[position[index]] = text }) {
+            writer.writeRecord(values.map { it.orEmpty() })
+            values.fill(null)
+        }
+        writer.flush()
+    }
+
+    private fun Writer.writeRecord(fields: List<String>) {
+        fields.forEachIndexed { i, field ->
+            if (i > 0) write(";")
+            write("\"")
+            write(field.replace("\"", "\"\""))
+            write("\"")
+        }
+        write("\n")
+    }
+
+    private fun columnIndexes(header: List<String>, columns: Set<String>, required: Set<String>): Map<String, Int> {
         val indexOf = HashMap<String, Int>()
         header.forEachIndexed { index, name -> if (name in columns) indexOf.putIfAbsent(name, index) }
         val missing = required - indexOf.keys
         if (missing.isNotEmpty()) throw OpenDataFormatException("Missing open-data columns: $missing")
+        return indexOf
+    }
+
+    private inline fun readTable(
+        input: InputStream,
+        charset: Charset,
+        columns: Set<String>,
+        required: Set<String>,
+        onRow: ((String) -> String?) -> Unit,
+    ) {
+        val reader = SemicolonCsvReader(InputStreamReader(input, charset))
+        val header = reader.readHeader() ?: return
+        val indexOf = columnIndexes(header, columns, required)
         val keep = BooleanArray(header.size) { it in indexOf.values }
         val values = arrayOfNulls<String>(header.size)
         val value: (String) -> String? = { name -> indexOf[name]?.let { values[it] }?.trim()?.takeUnless { it in MISSING } }

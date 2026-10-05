@@ -19,6 +19,6 @@ class MainActivitySmokeTest {
 
     @Test
     fun showsAppName() {
-        composeRule.onNodeWithText("Meu Santinho").assertIsDisplayed()
+        composeRule.onNodeWithText("Cola Eleitoral").assertIsDisplayed()
     }
 }

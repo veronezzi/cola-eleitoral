@@ -5,6 +5,7 @@ import com.veronezzi.colaeleitoral.domain.model.AppError
 import com.veronezzi.colaeleitoral.domain.model.AppResult
 import com.veronezzi.colaeleitoral.domain.model.CachedData
 import com.veronezzi.colaeleitoral.domain.model.CandidateDetail
+import com.veronezzi.colaeleitoral.domain.model.DataSource
 import com.veronezzi.colaeleitoral.domain.model.OfficeRules
 import com.veronezzi.colaeleitoral.domain.model.Round
 import com.veronezzi.colaeleitoral.domain.model.UserSettings
@@ -22,6 +23,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.io.IOException
 import java.time.Instant
 
 class CandidateDetailViewModelTest {
@@ -69,6 +71,49 @@ class CandidateDetailViewModelTest {
         assertEquals(3, saved.urnaOrder)
         assertEquals("Deferido", saved.statusAtSave)
         assertEquals(Instant.parse("2026-10-01T15:00:00Z"), saved.savedAt)
+    }
+
+    @Test
+    fun `the snapshot records which TSE system its status came from`() = runTest {
+        candidates.listFlow(ELECTION_ID, "SP", OfficeRules.SENATOR).value =
+            CachedData(UiTestData.senators, Instant.EPOCH, isStale = false, source = DataSource.TSE_OPEN_DATA)
+        val vm = viewModel(candidateId = 2)
+        vm.uiState.test {
+            expectMostRecentItem()
+            vm.onSaveClick()
+            assertEquals(PickState.SavedHere, expectMostRecentItem().pickState)
+        }
+        assertEquals(DataSource.TSE_OPEN_DATA, ballot.picks.value.single().source)
+    }
+
+    @Test
+    fun `a save that can't be written is reported, and saving works again afterwards`() = runTest {
+        ballot.writeFailure = IOException("ENOSPC")
+        val vm = viewModel(candidateId = 2)
+        vm.uiState.test {
+            vm.onSaveClick()
+            val failed = expectMostRecentItem()
+            assertEquals(DetailMessage.Failed(AppError.Storage), failed.message)
+            assertEquals(false, failed.isSaving)
+            assertEquals(PickState.NotSaved, failed.pickState)
+            vm.onMessageShown()
+            ballot.writeFailure = null
+            vm.onSaveClick()
+            assertEquals(PickState.SavedHere, expectMostRecentItem().pickState)
+        }
+    }
+
+    @Test
+    fun `while saved picks can't be read, saving waits behind the banner`() = runTest {
+        ballot.unavailable.value = true
+        val vm = viewModel(candidateId = 2)
+        vm.uiState.test {
+            assertTrue(expectMostRecentItem().picksUnavailable)
+            vm.onSaveClick()
+            vm.onRetryRead()
+        }
+        assertTrue(ballot.picks.value.isEmpty())
+        assertEquals(1, ballot.retryReadCalls)
     }
 
     @Test

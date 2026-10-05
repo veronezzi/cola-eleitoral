@@ -26,7 +26,7 @@ interface ElectionDao {
 
 @Dao
 interface MunicipalityDao {
-    @Query("SELECT * FROM municipalities WHERE uf = :uf")
+    @Query("SELECT * FROM municipalities WHERE uf = :uf ORDER BY searchKey, name")
     fun observeByUf(uf: String): Flow<List<MunicipalityEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -46,6 +46,12 @@ interface OfficeDao {
 
     @Query("DELETE FROM offices WHERE electionId = :electionId AND ueCode = :ueCode")
     suspend fun delete(electionId: Long, ueCode: String)
+
+    @Query("SELECT DISTINCT electionId FROM offices")
+    suspend fun electionIds(): List<Long>
+
+    @Query("DELETE FROM offices WHERE electionId = :electionId")
+    suspend fun deleteElection(electionId: Long)
 }
 
 @Dao
@@ -63,26 +69,12 @@ interface CandidateDao {
 
     @Query("DELETE FROM candidates WHERE electionId = :electionId AND ueCode = :ueCode AND officeCode = :officeCode")
     suspend fun delete(electionId: Long, ueCode: String, officeCode: Int)
-}
 
-@Dao
-interface CandidateDetailDao {
-    @Query("SELECT * FROM candidate_details WHERE electionId = :electionId AND candidateId = :candidateId")
-    fun observe(electionId: Long, candidateId: Long): Flow<CandidateDetailEntity?>
+    @Query("SELECT DISTINCT electionId FROM candidates")
+    suspend fun electionIds(): List<Long>
 
-    @Query(
-        "SELECT * FROM running_mates WHERE electionId = :electionId AND candidateId = :candidateId ORDER BY position",
-    )
-    fun observeRunningMates(electionId: Long, candidateId: Long): Flow<List<RunningMateEntity>>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(detail: CandidateDetailEntity)
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertRunningMates(runningMates: List<RunningMateEntity>)
-
-    @Query("DELETE FROM running_mates WHERE electionId = :electionId AND candidateId = :candidateId")
-    suspend fun deleteRunningMates(electionId: Long, candidateId: Long)
+    @Query("DELETE FROM candidates WHERE electionId = :electionId")
+    suspend fun deleteElection(electionId: Long)
 }
 
 @Dao
@@ -95,4 +87,14 @@ interface FetchStateDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(state: FetchStateEntity)
+
+    /** A few dozen rows at most (one per list the user opened). */
+    @Query("SELECT * FROM fetch_state")
+    suspend fun getAll(): List<FetchStateEntity>
+
+    @Query("DELETE FROM fetch_state WHERE substr(fetchKey, 1, length(:prefix)) = :prefix")
+    suspend fun deleteWithPrefix(prefix: String)
+
+    @Query("DELETE FROM fetch_state WHERE fetchKey = :key")
+    suspend fun delete(key: String)
 }

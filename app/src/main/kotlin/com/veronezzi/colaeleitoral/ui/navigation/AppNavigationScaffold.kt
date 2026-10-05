@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
@@ -33,7 +34,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.window.core.layout.WindowSizeClass
 import com.veronezzi.colaeleitoral.R
 
-/** First-level destinations (ARCHITECTURE.md 4.1): Início, Meu santinho, Sobre. */
+/** First-level destinations (ARCHITECTURE.md 4.1): Início, Minha cola, Sobre. */
 enum class TopLevelDestination(
     @StringRes val label: Int,
     val selectedIcon: ImageVector,
@@ -44,10 +45,18 @@ enum class TopLevelDestination(
     ABOUT(R.string.nav_about, Icons.Filled.Info, Icons.Outlined.Info),
 }
 
+/** Which navigation chrome surrounds the content. */
+enum class NavigationChrome { NONE, BAR, RAIL }
+
 /**
  * Bottom navigation bar on compact widths, navigation rail from medium widths on (material3
- * adaptive window size classes). The bar or rail consumes its own system-bar insets so the
- * screens' Scaffolds do not pad twice.
+ * adaptive window size classes), none on the first-run screens. The bar or rail consumes its own
+ * system-bar insets so the screens' Scaffolds do not pad twice.
+ *
+ * The tree is fixed: [content] (the NavHost) always sits at the same place and only the bar or
+ * rail comes and goes. Entering or leaving the first-run screens, or resizing the window, never
+ * recreates the NavHost, so its saved state (scroll, `rememberSaveable` of the back stack) and the
+ * transition animations survive.
  */
 @Composable
 fun AppNavigationScaffold(
@@ -57,14 +66,27 @@ fun AppNavigationScaffold(
     onSelect: (TopLevelDestination) -> Unit,
     content: @Composable () -> Unit,
 ) {
-    if (!showNavigation) {
-        content()
-        return
-    }
     val useRail = currentWindowAdaptiveInfo().windowSizeClass
         .isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)
-    if (useRail) {
-        Row(modifier = Modifier.fillMaxSize()) {
+    val chrome = when {
+        !showNavigation -> NavigationChrome.NONE
+        useRail -> NavigationChrome.RAIL
+        else -> NavigationChrome.BAR
+    }
+    AppNavigationLayout(chrome = chrome, selected = selected, ballotEnabled = ballotEnabled, onSelect = onSelect, content = content)
+}
+
+/** [AppNavigationScaffold] with the chrome decided by the caller (tests use it directly). */
+@Composable
+fun AppNavigationLayout(
+    chrome: NavigationChrome,
+    selected: TopLevelDestination?,
+    ballotEnabled: Boolean,
+    onSelect: (TopLevelDestination) -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Row(modifier = Modifier.fillMaxSize()) {
+        if (chrome == NavigationChrome.RAIL) {
             NavigationRail(modifier = Modifier.fillMaxHeight()) {
                 TopLevelDestination.entries.forEach { destination ->
                     NavigationRailItem(
@@ -76,32 +98,44 @@ fun AppNavigationScaffold(
                     )
                 }
             }
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Start)),
-            ) {
-                content()
-            }
         }
-    } else {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .then(
+                    if (chrome == NavigationChrome.RAIL) {
+                        Modifier.consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Start))
+                    } else {
+                        Modifier
+                    },
+                ),
+        ) {
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .consumeWindowInsets(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
+                    .fillMaxWidth()
+                    .then(
+                        if (chrome == NavigationChrome.BAR) {
+                            Modifier.consumeWindowInsets(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom))
+                        } else {
+                            Modifier
+                        },
+                    ),
             ) {
                 content()
             }
-            NavigationBar {
-                TopLevelDestination.entries.forEach { destination ->
-                    NavigationBarItem(
-                        selected = destination == selected,
-                        onClick = { onSelect(destination) },
-                        enabled = destination != TopLevelDestination.BALLOT || ballotEnabled,
-                        icon = { DestinationIcon(destination, destination == selected) },
-                        label = { Text(stringResource(destination.label)) },
-                    )
+            if (chrome == NavigationChrome.BAR) {
+                NavigationBar {
+                    TopLevelDestination.entries.forEach { destination ->
+                        NavigationBarItem(
+                            selected = destination == selected,
+                            onClick = { onSelect(destination) },
+                            enabled = destination != TopLevelDestination.BALLOT || ballotEnabled,
+                            icon = { DestinationIcon(destination, destination == selected) },
+                            label = { Text(stringResource(destination.label)) },
+                        )
+                    }
                 }
             }
         }

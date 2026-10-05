@@ -21,7 +21,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -32,8 +31,8 @@ import com.veronezzi.colaeleitoral.ui.theme.ColaEleitoralTheme
 /**
  * Candidate photo over a neutral initials avatar. The initials show while the photo loads, when it
  * fails and when there is no photo (proportional offices, open data), all with the same look for
- * every candidate. Photos go through Coil's singleton image loader (disk cache: seen photos work
- * offline).
+ * every candidate. Photos go through Coil's singleton image loader, kept in memory only (privacy:
+ * the files of the app never show which candidacies were opened).
  *
  * @param photoDescription "Foto de {nome}" where the photo adds information; null when the name is
  * already announced next to it (list items).
@@ -74,6 +73,7 @@ fun CandidateAvatar(
 /**
  * Official status text exactly as the TSE publishes it, in the same neutral style for every value
  * (no green or red, ARCHITECTURE.md 4.4). Blank texts read "Situação não informada pelo TSE".
+ * Never truncated: at 200% font, "INDEFERIDO EM PRAZO RECURSAL OU COM RECURSO" wraps instead.
  */
 @Composable
 fun StatusChip(
@@ -92,8 +92,6 @@ fun StatusChip(
             text = label,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
         )
     }

@@ -2,6 +2,8 @@ package com.veronezzi.colaeleitoral.ui.screens.onboarding
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.veronezzi.colaeleitoral.domain.model.AppError
+import com.veronezzi.colaeleitoral.domain.model.AppResult
 import com.veronezzi.colaeleitoral.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +25,8 @@ enum class OnboardingNext { LOCATION, HOME }
 
 data class OnboardingUiState(
     val isSaving: Boolean = false,
+    /** The acceptance could not be saved (disk full): the notice stays and can be accepted again. */
+    val error: AppError? = null,
     /** Set once the notice is accepted; the screen navigates and calls [OnboardingViewModel.onNavigated]. */
     val next: OnboardingNext? = null,
 )
@@ -37,9 +41,13 @@ class OnboardingViewModel @Inject constructor(
 
     fun onAccept() {
         if (state.value.isSaving) return
-        state.update { it.copy(isSaving = true) }
+        state.update { it.copy(isSaving = true, error = null) }
         viewModelScope.launch {
-            settingsRepository.completeOnboarding(DISCLAIMER_VERSION)
+            val result = settingsRepository.completeOnboarding(DISCLAIMER_VERSION)
+            if (result is AppResult.Failure) {
+                state.update { it.copy(isSaving = false, error = result.error) }
+                return@launch
+            }
             val hasLocation = settingsRepository.settings.first().location != null
             state.update {
                 it.copy(isSaving = false, next = if (hasLocation) OnboardingNext.HOME else OnboardingNext.LOCATION)

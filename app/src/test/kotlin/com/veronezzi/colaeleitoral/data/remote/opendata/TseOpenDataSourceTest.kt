@@ -1,5 +1,6 @@
 package com.veronezzi.colaeleitoral.data.remote.opendata
 
+import com.veronezzi.colaeleitoral.data.testing.Fixtures
 import com.veronezzi.colaeleitoral.data.testing.MutableClock
 import com.veronezzi.colaeleitoral.data.testing.OpenDataFixtures
 import com.veronezzi.colaeleitoral.data.testing.RoutingDispatcher
@@ -8,17 +9,27 @@ import com.veronezzi.colaeleitoral.data.testing.TestNetwork
 import com.veronezzi.colaeleitoral.domain.model.AppError
 import com.veronezzi.colaeleitoral.domain.model.AppResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.File
 import java.time.Duration
+import java.util.concurrent.TimeUnit
+import java.util.zip.GZIPInputStream
+import kotlin.system.measureTimeMillis
 
 class TseOpenDataSourceTest {
     @get:Rule
@@ -27,13 +38,17 @@ class TseOpenDataSourceTest {
     private val server = MockWebServer()
     private val routes = RoutingDispatcher()
     private val clock = MutableClock(TestElections.ELECTION_DAY_MORNING)
+    private lateinit var directory: File
+    private lateinit var store: OpenDataFileStore
     private lateinit var source: TseOpenDataSource
 
     @Before
     fun setUp() {
         server.dispatcher = routes
         server.start()
-        source = TseOpenDataSource(TestNetwork.openDataStore(server, clock, temporaryFolder.newFolder("open-data")), Dispatchers.IO)
+        directory = temporaryFolder.newFolder("open-data")
+        store = TestNetwork.openDataStore(server, clock, directory)
+        source = TseOpenDataSource(store, Dispatchers.IO)
         routes.on(OpenDataFixtures.CANDIDATES_PATH) {
             TestNetwork.conditionalZip(it, OpenDataFixtures.candidatesZip, OpenDataFixtures.CANDIDATES_ETAG)
         }
@@ -104,5 +119,58 @@ class TseOpenDataSourceTest {
     fun municipalElectionsAreNotServed() = runTest {
         assertEquals(AppResult.Failure(AppError.NotFound), source.fetchCandidates(TestElections.MUNICIPAL_2024, "81809", 11))
         assertEquals(0, routes.count("/"))
+    }
+
+    @Test
+    fun refreshKeepsNoZipAndNoPersonalDataOnDisk() = runTest {
+        source.fetchCandidates(TestElections.GENERAL_2026, "AL", 3)
+        source.fetchCandidates(TestElections.GENERAL_2026, "BR", 1)
+
+        val files = directory.walkTopDown().filter { it.isFile }.toList()
+        assertTrue(files.isNotEmpty())
+        assertTrue(files.toString(), files.none { it.name.endsWith(".zip") || it.name.endsWith(".part") || it.name.endsWith(".etag") })
+        val derived = files.filter { it.name.endsWith(".gz") }
+        assertEquals(
+            setOf("consulta_cand_2026_al.csv.gz", "consulta_cand_2026_br.csv.gz", "consulta_cand_complementar_2026_al.csv.gz", "consulta_cand_complementar_2026_br.csv.gz"),
+            derived.map { it.name }.toSet(),
+        )
+        val text = derived.joinToString("\n") { file -> GZIPInputStream(file.inputStream()).use { it.readBytes().decodeToString() } }
+        val original = Fixtures.text("tse-opendata/consulta_cand_2026_AL.csv")
+        for (column in listOf("NR_CPF_CANDIDATO", "NR_TITULO_ELEITORAL_CANDIDATO", "DS_EMAIL", "DT_NASCIMENTO", "DS_GENERO", "DS_COR_RACA")) {
+            assertTrue("the TSE file has $column", original.contains(column))
+            assertFalse(column, text.contains(column))
+        }
+        assertTrue("the derived files keep the public columns", text.contains("NM_URNA_CANDIDATO"))
+    }
+
+    @Test
+    fun zipsKeptByOlderVersionsAreDeletedAtStartup() = runTest {
+        source.fetchCandidates(TestElections.GENERAL_2026, "AL", 3)
+        val legacy = listOf("consulta_cand_2026.zip", "consulta_cand_2026.zip.etag", "consulta_cand_2026.zip.part").map { File(directory, it) }
+        legacy.forEach { it.writeText("old") }
+
+        store.deleteLegacyFiles()
+
+        assertTrue(legacy.none { it.exists() })
+        assertTrue(source.fetchCandidates(TestElections.GENERAL_2026, "AL", 5) is AppResult.Success)
+        assertEquals("the derived data is kept", 1, routes.count(OpenDataFixtures.CANDIDATES_PATH))
+    }
+
+    @Test
+    fun clearDoesNotWaitForASlowDownload() = runBlocking {
+        routes.on(OpenDataFixtures.CANDIDATES_PATH) {
+            TestNetwork.zip(OpenDataFixtures.candidatesZip, OpenDataFixtures.CANDIDATES_ETAG).newBuilder()
+                .bodyDelay(30, TimeUnit.SECONDS)
+                .build()
+        }
+        val fetch = async(Dispatchers.IO) { source.fetchCandidates(TestElections.GENERAL_2026, "AL", 3) }
+        withTimeout(10_000) { while (routes.count(OpenDataFixtures.CANDIDATES_PATH) == 0) delay(20) }
+        delay(200)
+
+        val clearTime = measureTimeMillis { store.clear() }
+
+        assertTrue("clear took $clearTime ms", clearTime < 2_000)
+        assertEquals(AppResult.Failure(AppError.Unknown(null)), withTimeout(5_000) { fetch.await() })
+        assertTrue(directory.walkTopDown().none { it.isFile })
     }
 }

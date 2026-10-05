@@ -29,11 +29,15 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object StorageModule {
-    /** Public cache only: rebuildable, so schema changes drop and re-download. */
+    /**
+     * Public cache only: known schema changes migrate (keeping the lists for offline use), any
+     * other change (a downgrade, for example) drops it and downloads again.
+     */
     @Provides
     @Singleton
     fun publicCacheDatabase(@ApplicationContext context: Context): PublicCacheDatabase =
         Room.databaseBuilder(context, PublicCacheDatabase::class.java, PublicCacheDatabase.NAME)
+            .addMigrations(PublicCacheDatabase.MIGRATION_1_2)
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
 
@@ -54,7 +58,8 @@ object StorageModule {
 
     /**
      * The picks: AES-256-GCM file in `noBackupFilesDir` (never in Auto Backup or device transfer).
-     * An unreadable file is replaced by an empty state flagged `picksLost` (shown once by the UI).
+     * A file that can never be read again is replaced by an empty state flagged `picksLost`
+     * (shown once by the UI); a transient failure leaves the file alone ([EncryptedBallotSerializer]).
      */
     @Provides
     @Singleton

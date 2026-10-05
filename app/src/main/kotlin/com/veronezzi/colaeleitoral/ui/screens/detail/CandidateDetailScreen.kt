@@ -49,8 +49,10 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.veronezzi.colaeleitoral.R
+import com.veronezzi.colaeleitoral.domain.model.AppError
 import com.veronezzi.colaeleitoral.domain.model.BallotPick
 import com.veronezzi.colaeleitoral.domain.model.CandidateDetail
 import com.veronezzi.colaeleitoral.domain.model.RunningMate
@@ -67,6 +69,7 @@ import com.veronezzi.colaeleitoral.ui.components.DigitBoxes
 import com.veronezzi.colaeleitoral.ui.components.ErrorState
 import com.veronezzi.colaeleitoral.ui.components.ListSkeleton
 import com.veronezzi.colaeleitoral.ui.components.MessageState
+import com.veronezzi.colaeleitoral.ui.components.PicksUnavailableBanner
 import com.veronezzi.colaeleitoral.ui.components.ScreenPreviews
 import com.veronezzi.colaeleitoral.ui.components.SectionHeader
 import com.veronezzi.colaeleitoral.ui.components.StatusChip
@@ -85,6 +88,10 @@ fun CandidateDetailRouteScreen(
     ) { it.create(route) },
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    LifecycleResumeEffect(viewModel) {
+        viewModel.onScreenResumed()
+        onPauseOrDispose { }
+    }
     CandidateDetailScreen(
         state = state,
         onBack = onBack,
@@ -96,6 +103,7 @@ fun CandidateDetailRouteScreen(
         onMessageShown = viewModel::onMessageShown,
         onRetry = viewModel::onRefresh,
         onOpenBallot = onOpenBallot,
+        onRetryRead = viewModel::onRetryRead,
     )
 }
 
@@ -112,6 +120,7 @@ fun CandidateDetailScreen(
     onRetry: () -> Unit,
     onOpenBallot: () -> Unit,
     modifier: Modifier = Modifier,
+    onRetryRead: () -> Unit = {},
 ) {
     SecureScreen(active = state.pickState != PickState.NotSaved)
     val snackbarHostState = remember { SnackbarHostState() }
@@ -143,7 +152,7 @@ fun CandidateDetailScreen(
                     aboutCandidate = true,
                     officialUrl = state.officialPageUrl,
                 )
-                DetailContent.Loaded -> DetailContentView(state, voteLabel, onSave, onRemove, onRetry)
+                DetailContent.Loaded -> DetailContentView(state, voteLabel, onSave, onRemove, onRetry, onRetryRead)
             }
         }
     }
@@ -182,7 +191,8 @@ private fun DetailMessageEffect(
             ?: stringResource(R.string.detail_saved, voteLabel)
         is DetailMessage.Removed -> stringResource(R.string.detail_removed)
         is DetailMessage.Duplicate -> stringResource(R.string.detail_duplicate, state.officeName)
-        is DetailMessage.Failed -> stringResource(R.string.detail_save_failed)
+        is DetailMessage.Failed ->
+            stringResource(if (message.error == AppError.Storage) R.string.ballot_change_failed else R.string.detail_save_failed)
     }
     val action = when (message) {
         is DetailMessage.Saved -> stringResource(R.string.detail_saved_action)
@@ -218,6 +228,7 @@ private fun DetailContentView(
     onSave: () -> Unit,
     onRemove: () -> Unit,
     onRetry: () -> Unit,
+    onRetryRead: () -> Unit,
 ) {
     val candidate = state.candidate ?: return
     val context = LocalContext.current
@@ -229,6 +240,7 @@ private fun DetailContentView(
             .verticalScroll(rememberScrollState())
             .padding(bottom = 24.dp),
     ) {
+        if (state.picksUnavailable) PicksUnavailableBanner(onRetry = onRetryRead)
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -369,7 +381,11 @@ private fun PickActions(state: CandidateDetailUiState, voteLabel: String, onSave
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
-            OutlinedButton(onClick = onRemove, modifier = Modifier.fillMaxWidth().testTag(REMOVE_BUTTON_TAG)) {
+            OutlinedButton(
+                onClick = onRemove,
+                enabled = !state.picksUnavailable,
+                modifier = Modifier.fillMaxWidth().testTag(REMOVE_BUTTON_TAG),
+            ) {
                 Icon(Icons.Outlined.BookmarkRemove, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
                 Spacer(Modifier.width(ButtonDefaults.IconSpacing))
                 Text(stringResource(R.string.detail_remove))
@@ -382,7 +398,7 @@ private fun PickActions(state: CandidateDetailUiState, voteLabel: String, onSave
         else -> if (state.canEdit) {
             Button(
                 onClick = onSave,
-                enabled = !state.isSaving,
+                enabled = !state.isSaving && !state.picksUnavailable,
                 modifier = Modifier.fillMaxWidth().testTag(SAVE_BUTTON_TAG),
             ) {
                 Icon(Icons.Outlined.BookmarkAdd, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))

@@ -6,6 +6,7 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -84,6 +85,21 @@ class TseDtoParsingTest {
         val dto = TseJson.decodeFromString(CandidatosResponseDto.serializer(), json)
 
         assertEquals(listOf(2L), dto.candidatos.map { it.id })
+    }
+
+    @Test
+    fun largeCandidateListsAreReadOneItemAtATime() {
+        val items = (1..2_000).map { id ->
+            if (id == 1_000) """{"id":$id,"numero":"abc"}""" else """{"id":$id,"numero":13,"nomeUrna":"X","partido":{"sigla":"Y"}}"""
+        }
+        val json = """{"candidatos":[${items.joinToString(",")}]}"""
+
+        val streamed = TseJson.decodeFromString(CandidatosResponseDto.serializer(), json)
+        val fromTree = TseJson.decodeFromJsonElement(CandidatosResponseDto.serializer(), TseJson.parseToJsonElement(json))
+
+        assertEquals(1_999, streamed.candidatos.size)
+        assertFalse(streamed.candidatos.any { it.id == 1_000L })
+        assertEquals(streamed, fromTree)
     }
 
     /** The API sends CPF, título, birth date, e-mails...: no DTO may declare them (LGPD). */

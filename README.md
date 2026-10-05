@@ -1,4 +1,4 @@
-# Meu Santinho
+# Cola Eleitoral
 
 App Android que ajuda o eleitor a montar a própria **cola eleitoral** com os dados públicos de
 candidaturas do Tribunal Superior Eleitoral (TSE): escolher a eleição e o local de votação, buscar e
@@ -6,8 +6,8 @@ filtrar candidatos, guardar uma escolha por voto e levar a cola **em papel** no 
 sem internet. O celular não pode entrar na cabine de votação (Lei 9.504/97, art. 91-A); a cola em
 papel pode.
 
-> **Aviso.** O Meu Santinho é um aplicativo independente, sem vínculo com o TSE, a Justiça Eleitoral,
-> órgãos de governo, partidos ou candidatos. Os dados vêm do sistema público DivulgaCandContas do TSE
+> **Aviso.** O app Cola Eleitoral é independente, sem vínculo com o TSE, a Justiça Eleitoral, órgãos
+> de governo, partidos ou candidatos. Desenvolvedor: veronezzi. Os dados vêm do sistema público DivulgaCandContas do TSE
 > (<https://divulgacandcontas.tse.jus.br/divulga/>) e, quando ele não responde, do Portal de Dados
 > Abertos do TSE (<https://dadosabertos.tse.jus.br/>). Confira sempre no site oficial.
 
@@ -16,10 +16,11 @@ papel pode.
 - Eleições descobertas pela API do TSE (gerais e municipais, 1º e 2º turno), sem datas fixas no código.
 - Todos os candidatos que o TSE lista para cada cargo do local de votação, em ordem de número, com a
   situação da candidatura exatamente como o TSE publica; busca por nome, número ou partido e filtros.
-- Uma escolha por voto, na ordem da urna e com o número de dígitos de cada cargo. Em 2026, dois votos
-  para o Senado, com aviso de candidato repetido (o 2º voto repetido é anulado na urna).
+- Uma escolha por voto (tela Minha cola), na ordem da urna e com o número de dígitos de cada cargo. Em
+  2026, dois votos para o Senado, com aviso de candidato repetido (o 2º voto repetido é anulado na urna).
 - Cola para imprimir ou salvar em PDF (sistema de impressão do Android) e para compartilhar como imagem.
-- Uso offline: os dados do local ficam em cache e as escolhas não dependem de rede.
+- Uso offline: as listas do local ficam em cache e as escolhas não dependem de rede (detalhes e fotos
+  de candidatos ficam só na memória, por privacidade).
 - Lembrete opcional no dia da eleição, com texto genérico, e bloqueio opcional do app por biometria
   ou pelo bloqueio de tela do aparelho.
 - Acessibilidade: TalkBack (números lidos dígito por dígito), fonte do sistema até 200%, tema claro e
@@ -33,11 +34,17 @@ papel pode.
 - As escolhas revelam opinião política (dado sensível, LGPD art. 5º, II) e **ficam só no aparelho**:
   arquivo cifrado com AES-256-GCM, chave no Android Keystore, fora do backup e da transferência entre
   aparelhos, nunca em logs ou notificações.
-- O app só se conecta a servidores do TSE; o TSE recebe o IP e o que foi consultado, como em qualquer
-  acesso ao site oficial.
-- Política completa: [`docs/privacidade.md`](docs/privacidade.md) (publicada a partir de
-  [`docs/privacidade/index.html`](docs/privacidade/index.html)). Formulário Segurança dos dados do
-  Google Play: [`docs/data-safety.md`](docs/data-safety.md).
+- Detalhes de candidaturas, vices e fotos ficam só na memória; os ZIPs de dados abertos do TSE nunca
+  são gravados (só os dados derivados, sem CPF ou e-mail de candidatos, e o ETag); dados de eleições
+  não abertas há 60 dias são apagados na abertura do app.
+- O app só se conecta a `divulgacandcontas.tse.jus.br` e `cdn.tse.jus.br`; o TSE recebe o IP, o
+  `User-Agent` do app e o que foi consultado, como em qualquer acesso ao site oficial.
+- Política de privacidade: [`docs/privacidade.md`](docs/privacidade.md) é a fonte única. O app embute
+  esse texto no build e `scripts/render-privacy-page.py` gera dele a página
+  [`docs/privacidade/index.html`](docs/privacidade/index.html), publicada em
+  <https://veronezzi.github.io/cola-eleitoral-privacidade/> (repositório público
+  `veronezzi/cola-eleitoral-privacidade`). Formulário Segurança dos dados do Google Play:
+  [`docs/data-safety.md`](docs/data-safety.md).
 
 ## Fonte dos dados e atribuição
 
@@ -75,22 +82,23 @@ exige 21). O Gradle encontra os dois JDKs instalados e baixa o que faltar (fooja
 ## Release
 
 ```bash
-# AAB de release sem assinatura, para conferir o build (a URL e o e-mail precisam ser reais):
-./gradlew bundleRelease \
-  -PcolaEleitoral.privacyPolicyUrl=https://<usuario>.github.io/<repositorio>/privacidade/ \
-  -PcolaEleitoral.contactEmail=<e-mail de contato>
+# AAB de release sem assinatura, para conferir o build. URL da política, e-mail e nome do
+# desenvolvedor vêm de gradle.properties (colaEleitoral.*); -P na linha de comando substitui.
+./gradlew bundleRelease
 
 # Assinado: defina COLA_ELEITORAL_KEYSTORE (caminho absoluto), COLA_ELEITORAL_KEYSTORE_PASSWORD,
 # COLA_ELEITORAL_KEY_ALIAS e COLA_ELEITORAL_KEY_PASSWORD antes do comando acima.
 
-scripts/check-store-metadata.sh            # limites e formato da ficha da loja
-scripts/check-store-metadata.sh --release  # idem, e exige a política de privacidade preenchida
+scripts/check-store-metadata.sh            # ficha da loja e política (HTML igual ao Markdown)
+scripts/check-store-metadata.sh --release  # idem, e exige a política publicada e igual na URL
+python3 scripts/render-privacy-page.py     # refaz docs/privacidade/index.html de docs/privacidade.md
 python3 scripts/render-store-graphics.py   # refaz icon.png e featureGraphic.png do ícone adaptativo
 ```
 
 - **Trava de release:** qualquer tarefa da variante release (`assembleRelease`, `bundleRelease`...)
-  falha enquanto `colaEleitoral.privacyPolicyUrl` ou `colaEleitoral.contactEmail` (em `gradle.properties`)
-  contiverem `example.com`. Debug, lint e testes não são afetados.
+  falha enquanto os dados de publicação de `gradle.properties` (`colaEleitoral.privacyPolicyUrl`,
+  `colaEleitoral.contactEmail`, `colaEleitoral.developerName`) forem marcadores ou inválidos. Debug,
+  lint e testes não são afetados.
 - **Workflow `Release`** (`.github/workflows/release.yml`): roda com tags `v*` (por exemplo,
   `v1.0.0`) ou à mão; faz lint e testes, gera o AAB assinado com segredos do GitHub e guarda AAB e
   `mapping.txt` como artefatos. O envio ao Google Play (teste interno ou fechado) é opcional e fica
@@ -109,8 +117,9 @@ app/src/main/kotlin/com/veronezzi/colaeleitoral/
   work/          lembrete do dia da eleição (WorkManager)
 app/src/test/kotlin/            testes locais; amostras reais da API em app/src/test/resources/tse/
 app/schemas/                    esquemas exportados do Room
-fastlane/metadata/android/pt-BR/   ficha da loja (textos, novidades, ícone, imagem de destaque)
-scripts/                        validação da ficha e geração dos gráficos da loja
+fastlane/metadata/android/pt-BR/   ficha da loja (textos, novidades, ícone, imagem de destaque, capturas)
+scripts/                        validação da ficha e do manifesto mesclado, geração da página da
+                                política e dos gráficos da loja
 docs/                           arquitetura, publicação, política de privacidade, Segurança dos dados
 .github/workflows/              ci.yml (lint, testes, APK debug) e release.yml
 ```
@@ -120,7 +129,8 @@ docs/                           arquitetura, publicação, política de privacid
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): arquitetura, API do TSE, segurança, conformidade,
   riscos e decisões em aberto.
 - [`docs/PUBLICACAO.md`](docs/PUBLICACAO.md): publicação no Google Play, passo a passo.
-- [`docs/privacidade.md`](docs/privacidade.md): política de privacidade (LGPD).
+- [`docs/privacidade.md`](docs/privacidade.md): política de privacidade (LGPD), embutida no app e
+  publicada em <https://veronezzi.github.io/cola-eleitoral-privacidade/>.
 - [`docs/data-safety.md`](docs/data-safety.md): respostas do formulário Segurança dos dados.
 
 ## Licenças

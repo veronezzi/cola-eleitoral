@@ -1,5 +1,6 @@
 package com.veronezzi.colaeleitoral.ui.testing
 
+import com.veronezzi.colaeleitoral.domain.model.AppError
 import com.veronezzi.colaeleitoral.domain.model.AppResult
 import com.veronezzi.colaeleitoral.domain.model.BallotPick
 import com.veronezzi.colaeleitoral.domain.model.BallotSlotKey
@@ -35,20 +36,27 @@ class FakeSettingsRepository(initial: UserSettings = UserSettings()) : SettingsR
     val state = MutableStateFlow(initial)
     override val settings: Flow<UserSettings> = state
 
-    override suspend fun setLocation(location: VoterLocation) = state.update { it.copy(location = location) }
+    /** When set, every write fails with this error and leaves the settings unchanged (disk full). */
+    var writeError: AppError? = null
+
+    private fun write(change: (UserSettings) -> UserSettings): AppResult<Unit> {
+        writeError?.let { return AppResult.Failure(it) }
+        state.update(change)
+        return AppResult.Success(Unit)
+    }
+
+    override suspend fun setLocation(location: VoterLocation) = write { it.copy(location = location) }
 
     override suspend fun completeOnboarding(version: Int) =
-        state.update { it.copy(onboardingCompleted = true, acceptedDisclaimerVersion = version) }
+        write { it.copy(onboardingCompleted = true, acceptedDisclaimerVersion = version) }
 
-    override suspend fun setReminderEnabled(enabled: Boolean) = state.update { it.copy(reminderEnabled = enabled) }
+    override suspend fun setReminderEnabled(enabled: Boolean) = write { it.copy(reminderEnabled = enabled) }
 
-    override suspend fun setAppLockEnabled(enabled: Boolean) = state.update { it.copy(appLockEnabled = enabled) }
+    override suspend fun setAppLockEnabled(enabled: Boolean) = write { it.copy(appLockEnabled = enabled) }
 
-    override suspend fun setSecureScreens(enabled: Boolean) = state.update { it.copy(secureScreens = enabled) }
+    override suspend fun setSecureScreens(enabled: Boolean) = write { it.copy(secureScreens = enabled) }
 
-    override suspend fun clear() {
-        state.value = UserSettings()
-    }
+    override suspend fun clear() = write { UserSettings() }
 }
 
 class FakeElectionRepository(
@@ -153,7 +161,12 @@ class FakeCandidateRepository : CandidateRepository {
 class FakeBallotRepository(initial: List<BallotPick> = emptyList()) : BallotRepository {
     val picks = MutableStateFlow(initial)
     val picksLost = MutableStateFlow(false)
+    val unavailable = MutableStateFlow(false)
     var deletedAll = false
+    var retryReadCalls = 0
+
+    /** When set, every write throws it, as a full disk would (IOException). */
+    var writeFailure: Throwable? = null
 
     override fun observePicksLost(): Flow<Boolean> = picksLost
 
@@ -161,11 +174,19 @@ class FakeBallotRepository(initial: List<BallotPick> = emptyList()) : BallotRepo
         picksLost.value = false
     }
 
+    override fun observeUnavailable(): Flow<Boolean> = unavailable
+
+    override suspend fun retryRead() {
+        retryReadCalls += 1
+    }
+
     override fun observeBallot(electionId: Long, round: Round): Flow<List<BallotPick>> = picks.map { all ->
         all.filter { it.electionId == electionId && it.round == round }.sortedWith(compareBy({ it.urnaOrder }, { it.slot }))
     }
 
     override suspend fun savePick(pick: BallotPick): SavePickResult {
+        writeFailure?.let { throw it }
+        if (unavailable.value) return SavePickResult.Failed(AppError.Storage)
         val other = picks.value.firstOrNull {
             it.electionId == pick.electionId && it.round == pick.round && it.officeCode == pick.officeCode &&
                 it.slot != pick.slot && it.candidateId == pick.candidateId
@@ -175,12 +196,18 @@ class FakeBallotRepository(initial: List<BallotPick> = emptyList()) : BallotRepo
         return SavePickResult.Saved
     }
 
-    override suspend fun removePick(key: BallotSlotKey) = picks.update { list -> list.filterNot { it.key == key } }
+    override suspend fun removePick(key: BallotSlotKey) {
+        writeFailure?.let { throw it }
+        picks.update { list -> list.filterNot { it.key == key } }
+    }
 
-    override suspend fun clearBallot(electionId: Long, round: Round) =
+    override suspend fun clearBallot(electionId: Long, round: Round) {
+        writeFailure?.let { throw it }
         picks.update { list -> list.filterNot { it.electionId == electionId && it.round == round } }
+    }
 
     override suspend fun deleteAll() {
+        writeFailure?.let { throw it }
         picks.value = emptyList()
         deletedAll = true
     }

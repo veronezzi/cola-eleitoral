@@ -131,6 +131,8 @@ fun SettingsScreen(
             when (message) {
                 SettingsMessage.DOWNLOADS_CLEARED -> R.string.settings_downloads_cleared
                 SettingsMessage.LOCK_UNAVAILABLE -> R.string.settings_lock_unavailable
+                SettingsMessage.SAVE_FAILED -> R.string.settings_save_failed
+                SettingsMessage.DELETE_FAILED -> R.string.settings_delete_failed
             },
         )
         LaunchedEffect(message) {

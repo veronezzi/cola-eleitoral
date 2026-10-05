@@ -29,6 +29,7 @@ import com.veronezzi.colaeleitoral.ui.common.isRoundOpen
 import com.veronezzi.colaeleitoral.ui.common.loadStateOf
 import com.veronezzi.colaeleitoral.ui.common.resolveElection
 import com.veronezzi.colaeleitoral.ui.common.toFreshness
+import com.veronezzi.colaeleitoral.ui.common.tryLocalWrite
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -42,6 +43,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -95,6 +97,8 @@ data class HomeUiState(
     val freshness: Freshness? = null,
     val isRefreshing: Boolean = false,
     val reminderEnabled: Boolean = false,
+    /** Saved picks can't be read right now (nothing was deleted): banner with retry. */
+    val picksUnavailable: Boolean = false,
 ) {
     /** Picks are on screen: the window must be protected (ARCHITECTURE.md 5.6). */
     val showsPicks: Boolean
@@ -122,9 +126,15 @@ private data class RunoffInfo(val known: Boolean, val hasCandidates: Boolean)
 
 /**
  * Home: the election card, the voter's ballot in urna order with the saved picks, and the
- * reminder opt-in. Reads the cache first and refreshes in the background; on open it also
- * pre-loads, in sequence, the candidate lists of the ballot (at most 7) so the app works offline
- * on election day (ARCHITECTURE.md 2.8, item 5). The repositories skip downloads within the TTL.
+ * reminder opt-in. Reads the cache first and refreshes in the background; whenever the election
+ * or the place changes it also pre-loads, in sequence, the candidate lists of the ballot (at most
+ * 7) so the app works offline on election day (ARCHITECTURE.md 2.8, item 5). The repositories skip
+ * downloads within the TTL.
+ *
+ * The screen state is shared only while the Home is on screen (plus 5 s for rotation): with the
+ * Home in the back stack, no Room or DataStore query of the ballot keeps running. Only the light
+ * (election, place) key stays observed, to pre-load when it changes. The reminder is scheduled
+ * once per resume, after a change and after each pre-load (REPLACE makes it idempotent).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -140,7 +150,8 @@ class HomeViewModel @Inject constructor(
     private val refreshState = MutableStateFlow(RefreshState())
     private val today = MutableStateFlow(clock.todayInBrasilia())
 
-    private val context: StateFlow<HomeContext?> = combine(
+    /** Cold: every collector gets its own settings and elections subscription. */
+    private val contextFlow: Flow<HomeContext> = combine(
         settingsRepository.settings,
         electionRepository.observeElections(),
         electionSelection.selectedElectionId,
@@ -152,24 +163,17 @@ class HomeViewModel @Inject constructor(
             election = resolveElection(elections.value, selectedId, day),
             today = day,
         )
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    }
+
+    private val context: StateFlow<HomeContext?> =
+        contextFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
 
     /** (election, place) pairs: the ballot changes only when one of them does. */
-    private val ballotKey: Flow<Pair<ElectionContext, VoterLocation>?> = context
-        .map { ctx ->
-            val election = ctx?.election
-            val location = ctx?.settings?.location
-            if (election != null && location != null) election to location else null
-        }
-        .distinctUntilChanged()
+    private val ballotKey: Flow<BallotKey?> = context.map { it?.ballotKey() }.distinctUntilChanged()
 
-    private val offices: Flow<CachedData<List<Office>>?> = ballotKey.flatMapLatest { key ->
-        if (key == null) {
-            flowOf(null)
-        } else {
-            electionRepository.observeBallotOffices(key.first.election, key.second, key.first.round)
-        }
-    }
+    private val offices: Flow<CachedData<List<Office>>?> = ballotKey
+        .flatMapLatest(::officesOf)
+        .shareIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), replay = 1)
 
     private val picks: Flow<List<BallotPick>> = context
         .map { it?.election }
@@ -180,74 +184,47 @@ class HomeViewModel @Inject constructor(
 
     /** Second round only: which offices have candidates marked "2º turno" in the voter's units. */
     private val runoff: Flow<Map<Int, RunoffInfo>> = combine(ballotKey, offices) { key, offices -> key to offices }
-        .flatMapLatest { (key, offices) ->
-            val election = key?.first
-            val officeList = offices?.value.orEmpty()
-            if (election == null || election.round != Round.SECOND || officeList.isEmpty()) {
-                flowOf(emptyMap())
-            } else {
-                combine(
-                    officeList.map { office ->
-                        candidateRepository
-                            .observeCandidates(
-                                electionId = election.election.id,
-                                ueCode = office.ueCode,
-                                officeCode = office.code,
-                                filter = CandidateFilter(onlySecondRound = true),
-                            )
-                            .map { cached ->
-                                office.code to RunoffInfo(
-                                    known = cached.fetchedAt != null,
-                                    hasCandidates = cached.value.isNotEmpty(),
-                                )
-                            }
-                    },
-                ) { entries -> entries.toMap() }
-            }
-        }
+        .flatMapLatest { (key, offices) -> runoffOf(key?.election, offices) }
 
     val uiState: StateFlow<HomeUiState> = combine(
         context,
         offices,
         picks,
         runoff,
-        refreshState,
-    ) { ctx, offices, picks, runoff, refresh ->
-        buildState(ctx, offices, picks, runoff, refresh)
+        combine(refreshState, ballotRepository.observeUnavailable()) { refresh, unavailable -> refresh to unavailable },
+    ) { ctx, offices, picks, runoff, (refresh, unavailable) ->
+        buildState(ctx, offices, picks, runoff, refresh).copy(picksUnavailable = unavailable)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HomeUiState())
 
     init {
         // Ballot offices and the candidate lists of the ballot, whenever election or place change.
+        // Its own light subscription (settings and elections), independent of the screen state.
         viewModelScope.launch {
-            ballotKey.collectLatest { key ->
-                if (key != null) prefetchBallot(key.first, key.second)
-            }
-        }
-        // Opt-in reminder: (re)schedule the voter's upcoming rounds. REPLACE makes it idempotent.
-        viewModelScope.launch {
-            combine(context, runoff) { ctx, runoff ->
-                val election = ctx?.election?.election
-                if (ctx == null || election == null || !ctx.settings.reminderEnabled) {
-                    null
-                } else {
-                    ReminderPlan(election, runoff.values.any { it.known && it.hasCandidates }, ctx.today)
+            contextFlow.map { it.ballotKey() }.distinctUntilChanged().collectLatest { key ->
+                if (key != null) {
+                    prefetchBallot(key)
+                    scheduleReminders()
                 }
-            }.distinctUntilChanged().collect { plan -> plan?.let { schedule(it) } }
+            }
         }
     }
 
-    /** Called when the screen resumes: refresh within the TTL and pick up a new day. */
+    /** Called when the screen resumes: refresh within the TTL, pick up a new day, keep the reminder. */
     fun onScreenResumed() {
         today.value = clock.todayInBrasilia()
         viewModelScope.launch { refresh(force = false) }
+        scheduleReminders()
     }
 
     /** Pull to refresh or "Tentar de novo". */
     fun onRefresh() {
         viewModelScope.launch {
             refreshState.update { it.copy(isRefreshing = true) }
-            refresh(force = true)
-            refreshState.update { it.copy(isRefreshing = false) }
+            try {
+                refresh(force = true)
+            } finally {
+                refreshState.update { it.copy(isRefreshing = false) }
+            }
         }
     }
 
@@ -255,28 +232,75 @@ class HomeViewModel @Inject constructor(
         electionSelection.select(electionId)
     }
 
+    /** "Tentar de novo" on the banner shown while the picks can't be read. */
+    fun onRetryRead() {
+        viewModelScope.launch { tryLocalWrite { ballotRepository.retryRead() } }
+    }
+
     /** The user accepted the reminder (and the notification permission); scheduling follows. */
     fun onReminderEnabled() {
-        viewModelScope.launch { settingsRepository.setReminderEnabled(true) }
+        viewModelScope.launch {
+            if (settingsRepository.setReminderEnabled(true) is AppResult.Success) scheduleReminders()
+        }
     }
 
     private suspend fun refresh(force: Boolean) {
         val electionsResult = electionRepository.refreshElections(force)
         refreshState.update { it.copy(electionsError = (electionsResult as? AppResult.Failure)?.error) }
-        val ctx = context.value
-        val election = ctx?.election
-        val location = ctx?.settings?.location
-        if (election != null && location != null) {
-            electionRepository.refreshBallotOffices(election.election, location, force)
+        val key = contextFlow.first().ballotKey() ?: return
+        electionRepository.refreshBallotOffices(key.election.election, key.location, force)
+    }
+
+    private suspend fun prefetchBallot(key: BallotKey) {
+        electionRepository.refreshBallotOffices(key.election.election, key.location)
+        val ballotOffices = officesOf(key).first()?.value.orEmpty()
+        for (office in ballotOffices.take(MAX_PREFETCHED_LISTS)) {
+            candidateRepository.refreshCandidates(key.election.election, office.ueCode, office.code)
         }
     }
 
-    private suspend fun prefetchBallot(election: ElectionContext, location: VoterLocation) {
-        electionRepository.refreshBallotOffices(election.election, location)
-        val ballotOffices = electionRepository.observeBallotOffices(election.election, location, election.round).first()
-        for (office in ballotOffices.value.take(MAX_PREFETCHED_LISTS)) {
-            candidateRepository.refreshCandidates(election.election, office.ueCode, office.code)
+    /** Opt-in reminder: (re)schedules the voter's upcoming rounds from a one-off read. */
+    private fun scheduleReminders() {
+        viewModelScope.launch {
+            val ctx = contextFlow.first()
+            val election = ctx.election?.election
+            if (election == null || !ctx.settings.reminderEnabled) return@launch
+            val key = ctx.ballotKey()
+            val runoff = runoffOf(key?.election, key?.let { officesOf(it).first() }).first()
+            schedule(ReminderPlan(election, runoff.values.any { it.known && it.hasCandidates }, ctx.today))
         }
+    }
+
+    private fun officesOf(key: BallotKey?): Flow<CachedData<List<Office>>?> =
+        if (key == null) {
+            flowOf(null)
+        } else {
+            electionRepository.observeBallotOffices(key.election.election, key.location, key.election.round)
+        }
+
+    private fun runoffOf(election: ElectionContext?, offices: CachedData<List<Office>>?): Flow<Map<Int, RunoffInfo>> {
+        val officeList = offices?.value.orEmpty()
+        if (election == null || election.round != Round.SECOND || officeList.isEmpty()) return flowOf(emptyMap())
+        return combine(
+            officeList.map { office ->
+                candidateRepository
+                    .observeCandidates(
+                        electionId = election.election.id,
+                        ueCode = office.ueCode,
+                        officeCode = office.code,
+                        filter = CandidateFilter(onlySecondRound = true),
+                    )
+                    .map { cached ->
+                        office.code to RunoffInfo(known = cached.fetchedAt != null, hasCandidates = cached.value.isNotEmpty())
+                    }
+            },
+        ) { entries -> entries.toMap() }
+    }
+
+    private fun HomeContext.ballotKey(): BallotKey? {
+        val election = election ?: return null
+        val location = settings.location ?: return null
+        return BallotKey(election, location)
     }
 
     private suspend fun schedule(plan: ReminderPlan) {
@@ -360,6 +384,8 @@ class HomeViewModel @Inject constructor(
     }
 
     private data class ReminderPlan(val election: Election, val hasRunoff: Boolean, val today: LocalDate)
+
+    private data class BallotKey(val election: ElectionContext, val location: VoterLocation)
 
     private companion object {
         const val STOP_TIMEOUT_MILLIS = 5_000L

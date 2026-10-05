@@ -1,12 +1,16 @@
 package com.veronezzi.colaeleitoral.data.repository
 
 import android.app.Application
+import android.database.sqlite.SQLiteFullException
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.veronezzi.colaeleitoral.data.local.db.CandidateColumns
+import com.veronezzi.colaeleitoral.data.local.db.CandidateEntity
 import com.veronezzi.colaeleitoral.data.local.db.PublicCacheDatabase
 import com.veronezzi.colaeleitoral.data.remote.CandidateSourceSelector
 import com.veronezzi.colaeleitoral.data.remote.DivulgaCandContasSource
+import com.veronezzi.colaeleitoral.data.remote.NetworkMonitor
 import com.veronezzi.colaeleitoral.data.remote.TseCallExecutor
 import com.veronezzi.colaeleitoral.data.remote.opendata.TseOpenDataSource
 import com.veronezzi.colaeleitoral.data.testing.Fixtures
@@ -21,13 +25,24 @@ import com.veronezzi.colaeleitoral.domain.model.CandidateFilter
 import com.veronezzi.colaeleitoral.domain.model.DataSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -49,7 +64,11 @@ class OfflineFirstCandidateRepositoryTest {
     private val server = MockWebServer()
     private val routes = RoutingDispatcher()
     private val clock = MutableClock(TestElections.ELECTION_DAY_MORNING)
+    private val policy = CachePolicy(clock)
+    private val details = CandidateDetailMemoryCache()
     private lateinit var db: PublicCacheDatabase
+    private lateinit var selector: CandidateSourceSelector
+    private lateinit var primary: DivulgaCandContasSource
     private lateinit var repository: OfflineFirstCandidateRepository
 
     @Before
@@ -59,13 +78,14 @@ class OfflineFirstCandidateRepositoryTest {
         db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), PublicCacheDatabase::class.java)
             .allowMainThreadQueries()
             .build()
-        val primary = DivulgaCandContasSource(
+        primary = DivulgaCandContasSource(
             TestNetwork.api(server, clock, readTimeoutMillis = 300),
             TseCallExecutor(random = Random(0)),
             Dispatchers.Default,
         )
         val fallback = TseOpenDataSource(TestNetwork.openDataStore(server, clock, temporaryFolder.newFolder()), Dispatchers.IO)
-        repository = OfflineFirstCandidateRepository(db, CandidateSourceSelector(primary, fallback, clock), primary, clock, Dispatchers.Default)
+        selector = CandidateSourceSelector(primary, fallback, clock)
+        repository = OfflineFirstCandidateRepository(db, selector, primary, policy, details, Dispatchers.Default)
         routes.on(OpenDataFixtures.CANDIDATES_PATH) { TestNetwork.zip(OpenDataFixtures.candidatesZip, OpenDataFixtures.CANDIDATES_ETAG) }
         routes.on(OpenDataFixtures.STATUS_PATH) { TestNetwork.zip(OpenDataFixtures.statusZip, OpenDataFixtures.STATUS_ETAG) }
     }
@@ -224,6 +244,107 @@ class OfflineFirstCandidateRepositoryTest {
         assertEquals(listOf("Cancelado", "Deferido", "Indeferido"), options.registrationStatuses)
         assertEquals(12, options.parties.size)
         assertEquals("DC", options.parties.first().acronym)
+    }
+
+    @Test
+    fun fullDiskIsAStorageFailureAndKeepsTheCachedList() = runTest {
+        routes.on(PRESIDENT_LIST) { TestNetwork.json(Fixtures.text("tse/candidatos-listar.json")) }
+        repository.refreshCandidates(TestElections.GENERAL_2026, "BR", 1)
+        val bigList = presidentList(copies = 40)
+        fillTheDisk()
+        assertThrows("the DAO itself fails as on a full disk", SQLiteFullException::class.java) {
+            runBlocking { db.candidateDao().insertAll(bigListEntities()) }
+        }
+        clock.advance(Duration.ofHours(2))
+        routes.on(PRESIDENT_LIST) { TestNetwork.json(bigList) }
+
+        assertEquals(AppResult.Failure(AppError.Storage), repository.refreshCandidates(TestElections.GENERAL_2026, "BR", 1))
+        assertEquals("the cached list is untouched", 13, presidents().first().value.size)
+    }
+
+    @Test
+    fun aFailureThatNeverReachedTheTseCanBeRetriedAtOnce() = runTest {
+        routes.on(PRESIDENT_LIST) { TestNetwork.json("{}").newBuilder().headersDelay(2, TimeUnit.SECONDS).build() }
+        assertEquals(AppResult.Failure(AppError.Network), repository.refreshCandidates(TestElections.GENERAL_2026, "BR", 1))
+        routes.on(PRESIDENT_LIST) { TestNetwork.json(Fixtures.text("tse/candidatos-listar.json")) }
+
+        assertEquals(AppResult.Success(Unit), repository.refreshCandidates(TestElections.GENERAL_2026, "BR", 1, force = true))
+        assertEquals(13, presidents().first().value.size)
+    }
+
+    @Test
+    fun aRefusalIsNotAskedAgainForAMinuteUnlessTheNetworkChanges() = runTest {
+        routes.on(TestNetwork.API_PREFIX) { TestNetwork.akamaiDenied() }
+        val municipal = TestElections.MUNICIPAL_2024
+
+        assertEquals(AppResult.Failure(AppError.Blocked(403)), repository.refreshCandidates(municipal, "81809", 11))
+        assertEquals(AppResult.Failure(AppError.Blocked(403)), repository.refreshCandidates(municipal, "81809", 11, force = true))
+        assertEquals("the 403 and its single retry, nothing more", 2, routes.count(TestNetwork.API_PREFIX))
+
+        NetworkMonitor(ApplicationProvider.getApplicationContext(), policy, selector).onNetworkChanged()
+        routes.on(TestNetwork.API_PREFIX) { TestNetwork.json(Fixtures.text("tse/candidatos-listar.json")) }
+
+        assertEquals(AppResult.Success(Unit), repository.refreshCandidates(municipal, "81809", 11, force = true))
+        assertEquals(3, routes.count(TestNetwork.API_PREFIX))
+    }
+
+    @Test
+    fun whenTheOpenDataLayoutChangedThatErrorIsReportedAndThePrimaryIsAskedAgain() = runTest {
+        routes.on(TestNetwork.API_PREFIX) { TestNetwork.akamaiDenied() }
+        val changedLayout = OpenDataFixtures.zip("consulta_cand_2026_BR.csv" to "\"SQ_CANDIDATO\";\"OUTRA\"\r\n\"1\";\"x\"\r\n".toByteArray())
+        routes.on(OpenDataFixtures.CANDIDATES_PATH) { TestNetwork.zip(changedLayout, OpenDataFixtures.CANDIDATES_ETAG) }
+
+        assertEquals(AppResult.Failure(AppError.Parsing), repository.refreshCandidates(TestElections.GENERAL_2026, "BR", 1))
+        clock.advance(Duration.ofMinutes(2))
+        repository.refreshCandidates(TestElections.GENERAL_2026, "BR", 1)
+
+        assertEquals("no 5 min pause without a working fallback", 4, routes.count(TestNetwork.API_PREFIX))
+    }
+
+    @Test
+    fun detailsStayInMemoryOnly() = runTest {
+        routes.on("${TestNetwork.API_PREFIX}candidatura/buscar/2026/SP/20322002026/candidato/250002539612") {
+            TestNetwork.json(Fixtures.text("tse/candidato-buscar.json"))
+        }
+        repository.refreshCandidateDetail(TestElections.GENERAL_2026, "SP", 250002539612)
+        assertNotNull(repository.observeCandidateDetail(TestElections.GENERAL_2026.id, 250002539612).first().value)
+
+        assertTrue(db.fetchStateDao().getAll().none { it.fetchKey.startsWith("detail:") })
+        val tables = db.openHelper.readableDatabase.query("SELECT name FROM sqlite_master WHERE type = 'table'").use { cursor ->
+            buildList { while (cursor.moveToNext()) add(cursor.getString(0)) }
+        }
+        assertFalse(tables.toString(), tables.any { "detail" in it || "running" in it })
+        val afterRestart = OfflineFirstCandidateRepository(db, selector, primary, CachePolicy(clock), CandidateDetailMemoryCache(), Dispatchers.Default)
+        assertNull(afterRestart.observeCandidateDetail(TestElections.GENERAL_2026.id, 250002539612).first().value)
+    }
+
+    /** From now on the database may not grow: SQLite answers SQLITE_FULL, as on a full disk. */
+    private fun fillTheDisk() {
+        val sqlite = db.openHelper.writableDatabase
+        val pages = sqlite.query("PRAGMA page_count").use { it.moveToFirst(); it.getLong(0) }
+        sqlite.query("PRAGMA max_page_count = $pages").use { it.moveToFirst() }
+    }
+
+    /** The fixture list repeated with new ids: far more rows than fit in the free pages. */
+    private fun presidentList(copies: Int): String {
+        val fixture = Json.parseToJsonElement(Fixtures.text("tse/candidatos-listar.json")).jsonObject
+        val items = fixture.getValue("candidatos").jsonArray
+        val many = (0 until copies).flatMap { copy ->
+            items.map { item ->
+                val obj = item.jsonObject
+                val id = obj.getValue("id").jsonPrimitive.long + copy * 1_000_000_000L
+                JsonObject(obj + ("id" to JsonPrimitive(id)))
+            }
+        }
+        return JsonObject(fixture + ("candidatos" to JsonArray(many))).toString()
+    }
+
+    private fun bigListEntities() = (1..2_000L).map { id ->
+        CandidateEntity(
+            electionId = TestElections.GENERAL_2026.id,
+            id = id,
+            columns = CandidateColumns("BR", 1, id.toInt(), "NOME $id", "NOME COMPLETO $id", "P", 10, null, null, "Deferido", null, null, null, null),
+        )
     }
 
     private companion object {

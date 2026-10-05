@@ -2,6 +2,7 @@ package com.veronezzi.colaeleitoral.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.veronezzi.colaeleitoral.domain.model.AppResult
 import com.veronezzi.colaeleitoral.domain.model.UserSettings
 import com.veronezzi.colaeleitoral.domain.repository.BallotRepository
 import com.veronezzi.colaeleitoral.domain.repository.ElectionRepository
@@ -9,6 +10,7 @@ import com.veronezzi.colaeleitoral.domain.repository.SettingsRepository
 import com.veronezzi.colaeleitoral.ui.common.AppClock
 import com.veronezzi.colaeleitoral.ui.common.ElectionSelection
 import com.veronezzi.colaeleitoral.ui.common.resolveElection
+import com.veronezzi.colaeleitoral.ui.common.tryLocalWrite
 import com.veronezzi.colaeleitoral.ui.navigation.BallotRoute
 import com.veronezzi.colaeleitoral.ui.screens.onboarding.DISCLAIMER_VERSION
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -34,10 +36,12 @@ sealed interface AppUiState {
         val startDestination: StartDestination,
         val isLocked: Boolean,
         val secureScreens: Boolean,
-        /** Target of the "Meu santinho" tab; null until an election is known. */
+        /** Target of the "Minha cola" tab; null until an election is known. */
         val ballotTarget: BallotRoute?,
         /** Saved picks could not be decrypted and were discarded: show the one-time notice. */
         val picksLost: Boolean,
+        /** Turning the lock off from the lock screen could not be saved (disk full). */
+        val lockTurnOffFailed: Boolean = false,
     ) : AppUiState
 }
 
@@ -45,7 +49,7 @@ private enum class LockState { UNKNOWN, LOCKED, UNLOCKED }
 
 /**
  * App-wide state: the start destination (decided once, from the first settings read), the
- * optional lock gate and the target of the "Meu santinho" tab. The lock closes on every cold
+ * optional lock gate and the target of the "Minha cola" tab. The lock closes on every cold
  * start and when the app comes back after [LOCK_AFTER] in the background (ARCHITECTURE.md 4.10).
  */
 @HiltViewModel
@@ -57,6 +61,7 @@ class AppViewModel @Inject constructor(
     private val clock: AppClock,
 ) : ViewModel() {
     private val lockState = MutableStateFlow(LockState.UNKNOWN)
+    private val lockTurnOffFailed = MutableStateFlow(false)
     private var startDestination = StartDestination.ONBOARDING
     private var backgroundedAt: Instant? = null
 
@@ -76,7 +81,8 @@ class AppViewModel @Inject constructor(
         lockState,
         ballotTarget,
         ballotRepository.observePicksLost(),
-    ) { settings, lock, target, picksLost ->
+        lockTurnOffFailed,
+    ) { settings, lock, target, picksLost, turnOffFailed ->
         if (lock == LockState.UNKNOWN) {
             AppUiState.Loading
         } else {
@@ -86,6 +92,7 @@ class AppViewModel @Inject constructor(
                 secureScreens = settings.secureScreens,
                 ballotTarget = target,
                 picksLost = picksLost,
+                lockTurnOffFailed = turnOffFailed,
             )
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, AppUiState.Loading)
@@ -115,8 +122,20 @@ class AppViewModel @Inject constructor(
         lockState.value = LockState.UNLOCKED
     }
 
+    /**
+     * The device no longer has a screen lock, so the prompt can never succeed: the user chose, after
+     * a warning, to turn the app lock off instead of clearing the app's data (and losing the picks).
+     */
+    fun onTurnOffLock() {
+        viewModelScope.launch {
+            val turnedOff = settingsRepository.setAppLockEnabled(false) is AppResult.Success
+            lockTurnOffFailed.value = !turnedOff
+            if (turnedOff) lockState.value = LockState.UNLOCKED
+        }
+    }
+
     fun onPicksLostAcknowledged() {
-        viewModelScope.launch { ballotRepository.acknowledgePicksLost() }
+        viewModelScope.launch { tryLocalWrite { ballotRepository.acknowledgePicksLost() } }
     }
 
     companion object {

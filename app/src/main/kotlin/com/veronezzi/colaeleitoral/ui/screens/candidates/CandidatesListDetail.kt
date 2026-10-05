@@ -15,20 +15,26 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.veronezzi.colaeleitoral.R
 import com.veronezzi.colaeleitoral.domain.model.Office
+import com.veronezzi.colaeleitoral.ui.common.rememberKeyedViewModelStoreOwner
 import com.veronezzi.colaeleitoral.ui.components.MessageState
 import com.veronezzi.colaeleitoral.ui.navigation.CandidateListRoute
 import com.veronezzi.colaeleitoral.ui.navigation.detail
 import com.veronezzi.colaeleitoral.ui.screens.detail.CandidateDetailRouteScreen
+import com.veronezzi.colaeleitoral.ui.screens.detail.CandidateDetailViewModel
 import kotlinx.coroutines.launch
 
 /**
  * Candidate list and detail (ARCHITECTURE.md 4.1). On compact widths one pane at a time (the
  * detail replaces the list, with predictive back); on medium and expanded widths both side by
  * side. The detail content key is the candidate id, so the selection survives rotation and
- * process death; [CandidateListRoute] supplies the rest of the detail route.
+ * process death; [CandidateListRoute] supplies the rest of the detail route. The detail
+ * ViewModel lives in a store keyed by the selected id: opening another candidate clears the
+ * previous one, instead of piling up one ViewModel per candidate in the list's entry. Both panes
+ * refresh within the TTL when the screen comes back to the foreground.
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
@@ -42,6 +48,10 @@ fun CandidatesListDetail(
     },
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    LifecycleResumeEffect(viewModel) {
+        viewModel.onScreenResumed()
+        onPauseOrDispose { }
+    }
     val navigator = rememberListDetailPaneScaffoldNavigator<Long>()
     val scope = rememberCoroutineScope()
     val detailOnly = navigator.scaffoldValue[ListDetailPaneScaffoldRole.List] == PaneAdaptedValue.Hidden
@@ -68,6 +78,7 @@ fun CandidatesListDetail(
             AnimatedPane {
                 CandidateListScreen(
                     state = state,
+                    query = viewModel.query,
                     actions = actions,
                     selectedCandidateId = selectedId.takeUnless { detailOnly },
                 )
@@ -76,14 +87,21 @@ fun CandidatesListDetail(
         detailPane = {
             AnimatedPane {
                 if (selectedId != null) {
+                    val detailRoute = route.detail(selectedId)
+                    val detailOwner = rememberKeyedViewModelStoreOwner(key = selectedId)
                     CandidateDetailRouteScreen(
-                        route = route.detail(selectedId),
+                        route = detailRoute,
                         onBack = if (detailOnly) {
                             { scope.launch { navigator.navigateBack() } }
                         } else {
                             null
                         },
                         onOpenBallot = onOpenBallot,
+                        // One ViewModel per store: a fixed key keeps a single saved-state slot too.
+                        viewModel = hiltViewModel<CandidateDetailViewModel, CandidateDetailViewModel.Factory>(
+                            viewModelStoreOwner = detailOwner,
+                            key = DETAIL_PANE_KEY,
+                        ) { it.create(detailRoute) },
                     )
                 } else {
                     Surface {
@@ -98,3 +116,5 @@ fun CandidatesListDetail(
         },
     )
 }
+
+private const val DETAIL_PANE_KEY = "detail-pane"

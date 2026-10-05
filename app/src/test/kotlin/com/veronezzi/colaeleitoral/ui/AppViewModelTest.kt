@@ -1,5 +1,6 @@
 package com.veronezzi.colaeleitoral.ui
 
+import com.veronezzi.colaeleitoral.domain.model.AppError
 import com.veronezzi.colaeleitoral.domain.model.UserSettings
 import com.veronezzi.colaeleitoral.ui.common.AppClock
 import com.veronezzi.colaeleitoral.ui.common.ElectionSelection
@@ -37,8 +38,8 @@ class AppViewModelTest {
     private val clock = MutableClock(Instant.parse("2026-10-01T15:00:00Z"))
     private val ballot = FakeBallotRepository()
 
-    private fun viewModel(settings: UserSettings) = AppViewModel(
-        settingsRepository = FakeSettingsRepository(settings),
+    private fun viewModel(settings: UserSettings, repository: FakeSettingsRepository = FakeSettingsRepository(settings)) = AppViewModel(
+        settingsRepository = repository,
         electionRepository = FakeElectionRepository(listOf(UiTestData.election2026)),
         ballotRepository = ballot,
         electionSelection = ElectionSelection(),
@@ -97,6 +98,31 @@ class AppViewModelTest {
     fun `the ballot tab targets the current election and round`() {
         val vm = viewModel(UserSettings(acceptedDisclaimerVersion = DISCLAIMER_VERSION, location = UiTestData.sp))
         assertEquals(BallotRoute(UiTestData.ELECTION_ID, 1), vm.ready().ballotTarget)
+    }
+
+    @Test
+    fun `without a screen lock on the device, the app lock can be turned off`() {
+        val settings = FakeSettingsRepository(
+            UserSettings(acceptedDisclaimerVersion = DISCLAIMER_VERSION, location = UiTestData.sp, appLockEnabled = true),
+        )
+        val vm = viewModel(settings.state.value, settings)
+        assertTrue(vm.ready().isLocked)
+        vm.onTurnOffLock()
+        assertFalse(vm.ready().isLocked)
+        assertFalse(settings.state.value.appLockEnabled)
+        assertFalse(vm.ready().lockTurnOffFailed)
+    }
+
+    @Test
+    fun `when turning the lock off can't be saved, the app stays locked and says why`() {
+        val settings = FakeSettingsRepository(
+            UserSettings(acceptedDisclaimerVersion = DISCLAIMER_VERSION, location = UiTestData.sp, appLockEnabled = true),
+        )
+        val vm = viewModel(settings.state.value, settings)
+        settings.writeError = AppError.Storage
+        vm.onTurnOffLock()
+        assertTrue(vm.ready().isLocked)
+        assertTrue(vm.ready().lockTurnOffFailed)
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.veronezzi.colaeleitoral.di
 
 import android.content.Context
+import android.os.Build
 import com.veronezzi.colaeleitoral.BuildConfig
 import com.veronezzi.colaeleitoral.core.common.IoDispatcher
 import com.veronezzi.colaeleitoral.core.network.BuildTypeNetworkInterceptors
@@ -42,13 +43,14 @@ object NetworkModule {
     private const val OPEN_DATA_DIRECTORY = "tse-open-data"
 
     /**
-     * Base client: app User-Agent, TSE host allowlist, no cookies, 4 requests per host, headers
-     * logged in debug builds only. Unqualified so the image loader (Coil) can share it.
+     * Base client: app User-Agent, TSE host allowlist, no cookies, 4 requests per host, request
+     * lines logged in debug builds only. Unqualified: the photo loader (Coil) uses it too, through
+     * `ColaEleitoralApplication.newImageLoader`.
      */
     @Provides
     @Singleton
     fun baseOkHttpClient(): OkHttpClient = TseHttpClients.base(
-        userAgent = TseEndpoints.userAgent(BuildConfig.VERSION_NAME),
+        userAgent = TseEndpoints.userAgent(BuildConfig.VERSION_NAME, Build.VERSION.RELEASE, BuildConfig.PRIVACY_POLICY_URL),
         allowedHosts = TseEndpoints.ALLOWED_HOSTS,
         debugInterceptors = BuildTypeNetworkInterceptors.create(),
     )

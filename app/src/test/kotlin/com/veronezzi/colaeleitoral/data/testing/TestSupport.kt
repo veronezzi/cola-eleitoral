@@ -9,6 +9,7 @@ import com.veronezzi.colaeleitoral.data.local.secure.BallotKeyInvalidatedExcepti
 import com.veronezzi.colaeleitoral.data.remote.TseCallExecutor
 import com.veronezzi.colaeleitoral.data.remote.api.DivulgaCandContasApi
 import com.veronezzi.colaeleitoral.data.remote.opendata.OpenDataFileStore
+import com.veronezzi.colaeleitoral.domain.model.AppResult
 import com.veronezzi.colaeleitoral.domain.model.Election
 import com.veronezzi.colaeleitoral.domain.model.ElectionScope
 import com.veronezzi.colaeleitoral.domain.model.UserSettings
@@ -160,8 +161,11 @@ object TestNetwork {
         "You don't have permission to access \"http&#58;&#47;&#47;divulgacandcontas&#46;tse&#46;jus&#46;br&#47;\" " +
         "on this server.<P>\nReference&#32;&#35;18&#46;0&#46;0&#46;0\n</BODY>\n</HTML>\n"
 
+    /** The app's User-Agent as the base client sends it (Android release fixed for the tests). */
+    val USER_AGENT: String = TseEndpoints.userAgent(BuildConfig.VERSION_NAME, "14", BuildConfig.PRIVACY_POLICY_URL)
+
     fun baseClient(server: MockWebServer, allowedHosts: Set<String> = setOf(server.hostName)): OkHttpClient =
-        TseHttpClients.base(TseEndpoints.userAgent(BuildConfig.VERSION_NAME), allowedHosts, debugInterceptors = emptyList())
+        TseHttpClients.base(USER_AGENT, allowedHosts, debugInterceptors = emptyList())
 
     fun api(
         server: MockWebServer,
@@ -217,15 +221,21 @@ object TestNetwork {
 /**
  * Software AES-256-GCM standing in for the AndroidKeyStore on the JVM. [loseKey] simulates a
  * key the Keystore dropped, [invalidate] a permanently invalidated one, [failEncryption] a
- * Keystore that cannot encrypt at all.
+ * Keystore that cannot encrypt at all, and [encryptionFailure] / [decryptionFailure] any other
+ * Keystore exception (a transient `ProviderException`, for example) while set.
  */
 class FakeBallotCipher : BallotCipher {
     private var key: SecretKey? = null
     private var invalidated = false
     var failEncryption = false
+    var encryptionFailure: Throwable? = null
+    var decryptionFailure: Throwable? = null
+    var deleteKeyCalls = 0
+        private set
     val hasKey: Boolean get() = key != null
 
     override fun encrypt(plaintext: ByteArray, associatedData: ByteArray): ByteArray {
+        encryptionFailure?.let { throw it }
         if (failEncryption) throw GeneralSecurityException("Keystore unavailable")
         if (invalidated) throw BallotKeyInvalidatedException()
         val secret = key ?: newKey().also { key = it }
@@ -237,6 +247,7 @@ class FakeBallotCipher : BallotCipher {
     }
 
     override fun decrypt(sealed: ByteArray, associatedData: ByteArray): ByteArray {
+        decryptionFailure?.let { throw it }
         if (invalidated) throw BallotKeyInvalidatedException()
         val secret = key ?: throw BallotKeyInvalidatedException()
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -246,6 +257,7 @@ class FakeBallotCipher : BallotCipher {
     }
 
     override fun deleteKey() {
+        deleteKeyCalls++
         key = null
         invalidated = false
     }
@@ -266,16 +278,21 @@ class FakeSettingsRepository(initial: UserSettings = UserSettings()) : SettingsR
     private val state = MutableStateFlow(initial)
     override val settings = state
 
-    override suspend fun setLocation(location: VoterLocation) = state.update { it.copy(location = location) }
+    override suspend fun setLocation(location: VoterLocation) = change { it.copy(location = location) }
 
     override suspend fun completeOnboarding(version: Int) =
-        state.update { it.copy(onboardingCompleted = true, acceptedDisclaimerVersion = version) }
+        change { it.copy(onboardingCompleted = true, acceptedDisclaimerVersion = version) }
 
-    override suspend fun setReminderEnabled(enabled: Boolean) = state.update { it.copy(reminderEnabled = enabled) }
+    override suspend fun setReminderEnabled(enabled: Boolean) = change { it.copy(reminderEnabled = enabled) }
 
-    override suspend fun setAppLockEnabled(enabled: Boolean) = state.update { it.copy(appLockEnabled = enabled) }
+    override suspend fun setAppLockEnabled(enabled: Boolean) = change { it.copy(appLockEnabled = enabled) }
 
-    override suspend fun setSecureScreens(enabled: Boolean) = state.update { it.copy(secureScreens = enabled) }
+    override suspend fun setSecureScreens(enabled: Boolean) = change { it.copy(secureScreens = enabled) }
 
-    override suspend fun clear() = state.update { UserSettings() }
+    override suspend fun clear() = change { UserSettings() }
+
+    private fun change(transform: (UserSettings) -> UserSettings): AppResult<Unit> {
+        state.update(transform)
+        return AppResult.Success(Unit)
+    }
 }

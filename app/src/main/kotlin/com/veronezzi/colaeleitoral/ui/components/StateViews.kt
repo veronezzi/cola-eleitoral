@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.SdCardAlert
 import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -103,6 +104,7 @@ private fun AppError.icon(): ImageVector = when (this) {
     AppError.Network -> Icons.Outlined.CloudOff
     is AppError.Blocked -> Icons.Outlined.Block
     AppError.NotFound -> Icons.Outlined.SearchOff
+    AppError.Storage -> Icons.Outlined.SdCardAlert
     else -> Icons.Outlined.ErrorOutline
 }
 

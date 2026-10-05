@@ -76,8 +76,9 @@ fun AboutRouteScreen(actions: AboutActions, viewModel: AboutViewModel = hiltView
 
 /**
  * "Sobre" (ARCHITECTURE.md 4.9): independence notice, data source with link and the CC BY
- * attribution, how the election is chosen, version and the developer contact. The contact and
- * the privacy-policy URL come only from BuildConfig (Gradle properties).
+ * attribution, what the TSE receives on each query, how the election is chosen, version, who
+ * develops the app and the contact. Developer name, contact and the privacy-policy URL come only
+ * from BuildConfig (Gradle properties).
  */
 @Composable
 fun AboutScreen(
@@ -127,21 +128,29 @@ fun AboutScreen(
                     supporting = TseLinks.OPEN_DATA_HOME,
                     onClick = { context.openInBrowser(TseLinks.OPEN_DATA_HOME) },
                 )
-                SectionHeader(text = stringResource(R.string.about_how_section))
-                Paragraphs(stringResource(R.string.about_how_election), stringResource(R.string.about_neutrality))
-                SectionHeader(text = stringResource(R.string.about_app_section))
-                Paragraphs(stringResource(R.string.about_version, BuildConfig.VERSION_NAME))
-                LinkRow(
-                    icon = Icons.Outlined.Mail,
-                    title = stringResource(R.string.about_contact),
-                    supporting = BuildConfig.CONTACT_EMAIL,
-                    onClick = { context.writeEmail(BuildConfig.CONTACT_EMAIL, mailSubject) },
+                SectionHeader(text = stringResource(R.string.about_privacy_section))
+                Paragraphs(
+                    stringResource(R.string.privacy_tse_query_notice),
+                    stringResource(R.string.onboarding_privacy),
                 )
                 LinkRow(
                     icon = Icons.Outlined.Policy,
                     title = stringResource(R.string.privacy_title),
                     supporting = null,
                     onClick = actions.onOpenPrivacy,
+                )
+                SectionHeader(text = stringResource(R.string.about_how_section))
+                Paragraphs(stringResource(R.string.about_how_election), stringResource(R.string.about_neutrality))
+                SectionHeader(text = stringResource(R.string.about_app_section))
+                Paragraphs(
+                    stringResource(R.string.about_version, BuildConfig.VERSION_NAME),
+                    stringResource(R.string.about_developer, BuildConfig.DEVELOPER_NAME),
+                )
+                LinkRow(
+                    icon = Icons.Outlined.Mail,
+                    title = stringResource(R.string.about_contact),
+                    supporting = BuildConfig.CONTACT_EMAIL,
+                    onClick = { context.writeEmail(BuildConfig.CONTACT_EMAIL, mailSubject) },
                 )
                 LinkRow(
                     icon = Icons.Outlined.Code,

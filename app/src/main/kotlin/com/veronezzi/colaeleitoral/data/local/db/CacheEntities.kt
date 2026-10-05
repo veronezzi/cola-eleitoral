@@ -7,7 +7,9 @@ import androidx.room.PrimaryKey
 
 /*
  * Public, rebuildable TSE data only (ARCHITECTURE.md 2.8). The user's picks never go here: they
- * live encrypted in noBackupFilesDir (data/local/secure).
+ * live encrypted in noBackupFilesDir (data/local/secure). Candidate details and running mates are
+ * not stored either (they are opened right before a pick is saved, so a list of opened details
+ * would hint at the picks): they live only in an in-memory cache (S2).
  */
 
 @Entity(tableName = "elections")
@@ -29,6 +31,8 @@ data class MunicipalityEntity(
     val uf: String,
     val name: String,
     val sourceElectionId: Long,
+    /** `normalizeForSearch(name)`, computed once on insert: the DAO sorts by it. */
+    val searchKey: String,
 )
 
 @Entity(tableName = "offices", primaryKeys = ["electionId", "ueCode", "code"])
@@ -40,7 +44,7 @@ data class OfficeEntity(
     val candidateCount: Int?,
 )
 
-/** Candidate fields shared by the list rows and the detail rows. */
+/** Candidate fields of a list row. */
 data class CandidateColumns(
     val ueCode: String,
     val officeCode: Int,
@@ -67,37 +71,6 @@ data class CandidateEntity(
     val electionId: Long,
     val id: Long,
     @Embedded val columns: CandidateColumns,
-)
-
-/**
- * The detail keeps its own copy of the candidate fields: its status can be newer than the list's
- * (ARCHITECTURE.md 2.2, E5), and the detail screen shows the detail's.
- */
-@Entity(tableName = "candidate_details", primaryKeys = ["electionId", "candidateId"])
-data class CandidateDetailEntity(
-    val electionId: Long,
-    val candidateId: Long,
-    @Embedded val columns: CandidateColumns,
-    val coalitionType: String?,
-    val coalitionComposition: String?,
-    val officialPageUrl: String,
-    val photoPublishable: Boolean?,
-    /** ISO local date-time (Brasília). */
-    val lastUpdate: String?,
-)
-
-@Entity(tableName = "running_mates", primaryKeys = ["electionId", "candidateId", "position"])
-data class RunningMateEntity(
-    val electionId: Long,
-    val candidateId: Long,
-    val position: Int,
-    val mateId: Long?,
-    val role: String,
-    val ballotName: String,
-    val fullName: String?,
-    val partyAcronym: String?,
-    val photoUrl: String?,
-    val status: String?,
 )
 
 /**

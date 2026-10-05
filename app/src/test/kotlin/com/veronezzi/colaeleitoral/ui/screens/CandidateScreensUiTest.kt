@@ -105,7 +105,7 @@ class CandidateScreensUiTest {
         )
         composeRule.setContent {
             val state by vm.uiState.collectAsState()
-            ColaEleitoralTheme(dynamicColor = false) { CandidateListScreen(state = state, actions = actions) }
+            ColaEleitoralTheme(dynamicColor = false) { CandidateListScreen(state = state, query = vm.query, actions = actions) }
         }
         composeRule.onNodeWithText("Mostrando 4 de 4 candidaturas").assertIsDisplayed()
         composeRule.onNodeWithText("Ana Exemplo").assertIsDisplayed()
@@ -166,10 +166,10 @@ class CandidateScreensUiTest {
         composeRule.mainClock.autoAdvance = false
         composeRule.onNodeWithTag(SAVE_BUTTON_TAG).performScrollTo().performClick()
         composeRule.mainClock.advanceTimeBy(1_000)
-        composeRule.onNodeWithText("Salvo no seu santinho: Senador: 1ª vaga.").assertIsDisplayed()
+        composeRule.onNodeWithText("Salvo na sua cola: Senador: 1ª vaga.").assertIsDisplayed()
         composeRule.mainClock.autoAdvance = true
 
-        composeRule.onNodeWithText("No seu santinho: Senador: 1ª vaga").assertExists()
+        composeRule.onNodeWithText("Na sua cola: Senador: 1ª vaga").assertExists()
         composeRule.onNodeWithTag(REMOVE_BUTTON_TAG).assertExists()
         assertEquals(listOf(2L to 1), ballot.picks.value.map { it.candidateId to it.slot })
     }
@@ -178,7 +178,7 @@ class CandidateScreensUiTest {
     fun theSameSenatorIsNotOfferedForTheOtherVote() {
         ballot.picks.value = listOf(UiTestData.pick(UiTestData.senators[1], slot = 1))
         showDetail(detailViewModel(candidateId = 2, slot = 2))
-        composeRule.onNodeWithText("Este candidato já está no seu santinho, no outro voto para Senador (1ª vaga).")
+        composeRule.onNodeWithText("Este candidato já está na sua cola, no outro voto para Senador (1ª vaga).")
             .performScrollTo()
             .assertIsDisplayed()
         composeRule.onNodeWithTag(SAVE_BUTTON_TAG).assertDoesNotExist()

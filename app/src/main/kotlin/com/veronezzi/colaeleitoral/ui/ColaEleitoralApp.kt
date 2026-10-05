@@ -59,7 +59,11 @@ fun ColaEleitoralApp(viewModel: AppViewModel) {
             val navController = rememberNavController()
             val stateHolder = rememberSaveableStateHolder()
             if (current.isLocked) {
-                AppLockScreen(onUnlocked = viewModel::onUnlocked)
+                AppLockScreen(
+                    onUnlocked = viewModel::onUnlocked,
+                    onTurnOffLock = viewModel::onTurnOffLock,
+                    turnOffFailed = current.lockTurnOffFailed,
+                )
             } else {
                 stateHolder.SaveableStateProvider(key = "app") {
                     AppNavigation(

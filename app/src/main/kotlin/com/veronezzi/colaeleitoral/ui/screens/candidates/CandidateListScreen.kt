@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
@@ -53,7 +52,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.veronezzi.colaeleitoral.R
@@ -70,6 +68,8 @@ import com.veronezzi.colaeleitoral.ui.components.DataFreshnessBar
 import com.veronezzi.colaeleitoral.ui.components.ErrorState
 import com.veronezzi.colaeleitoral.ui.components.ListSkeleton
 import com.veronezzi.colaeleitoral.ui.components.MessageState
+import com.veronezzi.colaeleitoral.ui.components.NoPersonalizedLearning
+import com.veronezzi.colaeleitoral.ui.components.PrivateSearchKeyboardOptions
 import com.veronezzi.colaeleitoral.ui.components.ScreenPreviews
 import com.veronezzi.colaeleitoral.ui.components.StatusChip
 import com.veronezzi.colaeleitoral.ui.preview.PreviewData
@@ -92,10 +92,15 @@ data class CandidateListActions(
     val onRefresh: () -> Unit,
 )
 
+/**
+ * @param query text of the search field, read straight from the ViewModel's Compose state (not
+ * from [state]), so typing fast never loses characters or moves the cursor.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CandidateListScreen(
     state: CandidateListUiState,
+    query: String,
     actions: CandidateListActions,
     modifier: Modifier = Modifier,
     selectedCandidateId: Long? = null,
@@ -145,7 +150,7 @@ fun CandidateListScreen(
         ) {
             LazyColumn(modifier = Modifier.fillMaxSize().testTag(LIST_TEST_TAG)) {
                 item(key = "search") {
-                    SearchField(query = state.query, onQueryChange = actions.onQueryChange)
+                    SearchField(query = query, onQueryChange = actions.onQueryChange)
                 }
                 item(key = "summary") {
                     ListSummary(state = state, onOpenFilters = { showFilters = true })
@@ -208,29 +213,32 @@ fun CandidateListScreen(
     }
 }
 
+/** Search by name, number or party. The keyboard does not learn what is typed here (S13). */
 @Composable
 private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
     val focusManager = LocalFocusManager.current
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        label = { Text(stringResource(R.string.list_search_label)) },
-        leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
-                    Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.list_search_clear))
+    NoPersonalizedLearning {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            label = { Text(stringResource(R.string.list_search_label)) },
+            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+            trailingIcon = {
+                if (query.isNotEmpty()) {
+                    IconButton(onClick = { onQueryChange("") }) {
+                        Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.list_search_clear))
+                    }
                 }
-            }
-        },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .testTag(SEARCH_TEST_TAG),
-    )
+            },
+            singleLine = true,
+            keyboardOptions = PrivateSearchKeyboardOptions,
+            keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .testTag(SEARCH_TEST_TAG),
+        )
+    }
 }
 
 @Composable
@@ -383,6 +391,7 @@ private fun CandidateListScreenPreview() {
                 content = ListContent.Items,
                 freshness = PreviewData.freshness(),
             ),
+            query = "",
             actions = previewListActions,
         )
     }
@@ -401,6 +410,7 @@ private fun CandidateListLoadingPreview() {
                 maxPicks = 1,
                 isSecondRound = false,
             ),
+            query = "",
             actions = previewListActions,
         )
     }

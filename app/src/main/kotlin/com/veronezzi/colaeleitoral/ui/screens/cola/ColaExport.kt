@@ -52,7 +52,12 @@ object ColaExport {
 
     /** Opens the share sheet for [file]. Returns false when no app can receive it. */
     fun share(context: Context, file: File, chooserTitle: String): Boolean {
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val uri = try {
+            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        } catch (_: IllegalArgumentException) {
+            // Outside the FileProvider paths (should never happen): nothing is shared.
+            return false
+        }
         val send = Intent(Intent.ACTION_SEND)
             .setType("image/png")
             .putExtra(Intent.EXTRA_STREAM, uri)

@@ -16,8 +16,11 @@ import javax.inject.Singleton
  * [AppError.Blocked] and the election is general, the TSE open data serves the list instead and
  * the result is tagged [com.veronezzi.colaeleitoral.domain.model.DataSource.TSE_OPEN_DATA].
  *
- * After a refusal the primary is not asked again for [PRIMARY_COOLDOWN] (unless the user forces
- * a refresh): every new request would only wait for the same 403 and its retry.
+ * Once the open data has served a list after a refusal, the primary is not asked again for
+ * [PRIMARY_COOLDOWN] (unless the user forces a refresh): every new request would only wait for
+ * the same 403 and its retry. When the fallback fails too there is no cooldown (the primary is
+ * then the only way to the data), and the error shown is the one the user can act on
+ * ([mostUsefulError]).
  */
 @Singleton
 class CandidateSourceSelector @Inject constructor(
@@ -46,17 +49,22 @@ class CandidateSourceSelector @Inject constructor(
         }
         val refusal = (primaryResult as? AppResult.Failure)?.error as? AppError.Blocked
         if (refusal == null || !canFallBack) {
-            if (!skipPrimary && primaryResult is AppResult.Success) primaryRefusedUntil = Instant.MIN
+            if (!skipPrimary && primaryResult is AppResult.Success) reset()
             return Sourced(primaryResult, primary.source)
         }
-        if (!skipPrimary) {
-            primaryRefusedUntil = clock.instant().plus(PRIMARY_COOLDOWN)
-            lastRefusal = refusal
-        }
         return when (val fallbackResult = fallback.fetchCandidates(election, ueCode, officeCode)) {
-            is AppResult.Success -> Sourced(fallbackResult, fallback.source)
-            // Both failed: report why the official API failed (the UI links to the TSE site).
-            is AppResult.Failure -> Sourced(primaryResult, primary.source)
+            is AppResult.Success -> {
+                if (!skipPrimary) {
+                    primaryRefusedUntil = clock.instant().plus(PRIMARY_COOLDOWN)
+                    lastRefusal = refusal
+                }
+                Sourced(fallbackResult, fallback.source)
+            }
+            is AppResult.Failure -> {
+                // No substitute: the next request asks the primary again.
+                reset()
+                Sourced(AppResult.Failure(mostUsefulError(refusal, fallbackResult.error)), primary.source)
+            }
         }
     }
 
@@ -68,5 +76,16 @@ class CandidateSourceSelector @Inject constructor(
 
     companion object {
         val PRIMARY_COOLDOWN: Duration = Duration.ofMinutes(5)
+
+        /**
+         * The primary refused and the fallback failed with [fallbackError]. A problem the user can
+         * fix or should know about wins: no connection, a full disk, or the open-data layout changed
+         * (only an app update fixes that). Otherwise the refusal stands: another network or the
+         * official site may still work.
+         */
+        fun mostUsefulError(refusal: AppError.Blocked, fallbackError: AppError): AppError = when (fallbackError) {
+            AppError.Network, AppError.Storage, AppError.Parsing -> fallbackError
+            is AppError.Blocked, is AppError.Server, AppError.NotFound, is AppError.Unknown -> refusal
+        }
     }
 }

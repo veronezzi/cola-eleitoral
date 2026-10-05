@@ -44,13 +44,15 @@ fun normalizeForSearch(text: String): String =
 fun List<Candidate>.filteredBy(filter: CandidateFilter): List<Candidate> {
     val query = normalizeForSearch(filter.query)
     val isNumberQuery = query.isNotEmpty() && query.all { it.isDigit() }
-    val filtered = filter { candidate ->
+    // Each normalized text is computed at most once per candidate, not once per comparison.
+    val filtered = map(::SearchKeys).filter { keys ->
+        val candidate = keys.candidate
         val matchesQuery = when {
             query.isEmpty() -> true
             isNumberQuery -> candidate.number.toString().startsWith(query)
-            else -> normalizeForSearch(candidate.ballotName).contains(query) ||
-                candidate.fullName?.let { normalizeForSearch(it).contains(query) } == true ||
-                normalizeForSearch(candidate.party.acronym) == query
+            else -> keys.ballotName.contains(query) ||
+                keys.fullName?.contains(query) == true ||
+                keys.party == query
         }
         matchesQuery &&
             (filter.partyAcronyms.isEmpty() || candidate.party.acronym in filter.partyAcronyms) &&
@@ -58,10 +60,17 @@ fun List<Candidate>.filteredBy(filter: CandidateFilter): List<Candidate> {
                 candidate.status.registration in filter.registrationStatuses) &&
             (!filter.onlySecondRound || candidate.status.isInSecondRound)
     }
-    val comparator: Comparator<Candidate> = when (filter.sortOrder) {
-        SortOrder.NUMBER -> compareBy<Candidate> { it.number }.thenBy { normalizeForSearch(it.ballotName) }
-        SortOrder.BALLOT_NAME -> compareBy<Candidate> { normalizeForSearch(it.ballotName) }.thenBy { it.number }
-        SortOrder.PARTY -> compareBy<Candidate> { normalizeForSearch(it.party.acronym) }.thenBy { it.number }
+    val comparator: Comparator<SearchKeys> = when (filter.sortOrder) {
+        SortOrder.NUMBER -> compareBy<SearchKeys> { it.candidate.number }.thenBy { it.ballotName }
+        SortOrder.BALLOT_NAME -> compareBy<SearchKeys> { it.ballotName }.thenBy { it.candidate.number }
+        SortOrder.PARTY -> compareBy<SearchKeys> { it.party }.thenBy { it.candidate.number }
     }
-    return filtered.sortedWith(comparator)
+    return filtered.sortedWith(comparator).map { it.candidate }
+}
+
+/** Normalized texts of one candidate, each computed on first use. */
+private class SearchKeys(val candidate: Candidate) {
+    val ballotName: String by lazy(LazyThreadSafetyMode.NONE) { normalizeForSearch(candidate.ballotName) }
+    val fullName: String? by lazy(LazyThreadSafetyMode.NONE) { candidate.fullName?.let(::normalizeForSearch) }
+    val party: String by lazy(LazyThreadSafetyMode.NONE) { normalizeForSearch(candidate.party.acronym) }
 }

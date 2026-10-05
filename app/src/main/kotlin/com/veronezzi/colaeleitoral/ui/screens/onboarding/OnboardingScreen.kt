@@ -18,6 +18,7 @@ import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Source
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -34,14 +35,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.veronezzi.colaeleitoral.R
+import com.veronezzi.colaeleitoral.domain.model.AppError
 import com.veronezzi.colaeleitoral.ui.common.TseLinks
 import com.veronezzi.colaeleitoral.ui.common.openInBrowser
+import com.veronezzi.colaeleitoral.ui.common.presentation
 import com.veronezzi.colaeleitoral.ui.components.ScreenPreviews
 import com.veronezzi.colaeleitoral.ui.theme.ColaEleitoralTheme
 
@@ -57,19 +62,21 @@ fun OnboardingRoute(
             onContinue(next)
         }
     }
-    OnboardingScreen(isSaving = state.isSaving, onAccept = viewModel::onAccept)
+    OnboardingScreen(isSaving = state.isSaving, error = state.error, onAccept = viewModel::onAccept)
 }
 
 /**
  * Independence notice (ARCHITECTURE.md 4.2; Google Play "government information" policy): the
- * app is not the TSE nor a government body, where the data comes from, and that picks stay on
- * the device. No TSE or Justiça Eleitoral logos, no Brasão.
+ * app is not the TSE nor a government body, where the data comes from, what the TSE receives on
+ * each query (LGPD art. 9º) and that picks stay on the device. No TSE or Justiça Eleitoral logos,
+ * no Brasão.
  */
 @Composable
 fun OnboardingScreen(
     isSaving: Boolean,
     onAccept: () -> Unit,
     modifier: Modifier = Modifier,
+    error: AppError? = null,
 ) {
     val context = LocalContext.current
     Surface(modifier = modifier.fillMaxSize()) {
@@ -107,6 +114,7 @@ fun OnboardingScreen(
                     Spacer(Modifier.width(ButtonDefaults.IconSpacing))
                     Text(stringResource(R.string.onboarding_open_source_site))
                 }
+                NoticeParagraph(icon = Icons.Outlined.Public, text = stringResource(R.string.privacy_tse_query_notice))
                 NoticeParagraph(icon = Icons.Outlined.Lock, text = stringResource(R.string.onboarding_privacy))
                 NoticeParagraph(icon = Icons.Outlined.PhoneAndroid, text = stringResource(R.string.onboarding_booth))
                 Button(
@@ -117,6 +125,14 @@ fun OnboardingScreen(
                         .padding(top = 8.dp),
                 ) {
                     Text(stringResource(R.string.onboarding_accept))
+                }
+                error?.let {
+                    Text(
+                        text = stringResource(it.presentation().message),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    )
                 }
             }
         }

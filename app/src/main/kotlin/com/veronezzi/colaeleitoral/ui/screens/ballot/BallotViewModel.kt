@@ -5,10 +5,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.veronezzi.colaeleitoral.domain.model.BallotPick
 import com.veronezzi.colaeleitoral.domain.model.CachedData
+import com.veronezzi.colaeleitoral.domain.model.DataSource
 import com.veronezzi.colaeleitoral.domain.model.Election
 import com.veronezzi.colaeleitoral.domain.model.Office
 import com.veronezzi.colaeleitoral.domain.model.Round
+import com.veronezzi.colaeleitoral.domain.model.SavePickResult
 import com.veronezzi.colaeleitoral.domain.model.VoterLocation
+import com.veronezzi.colaeleitoral.domain.model.normalizeForSearch
 import com.veronezzi.colaeleitoral.domain.repository.BallotRepository
 import com.veronezzi.colaeleitoral.domain.repository.CandidateRepository
 import com.veronezzi.colaeleitoral.domain.repository.ElectionRepository
@@ -18,6 +21,7 @@ import com.veronezzi.colaeleitoral.ui.common.BallotSlot
 import com.veronezzi.colaeleitoral.ui.common.buildBallotSlots
 import com.veronezzi.colaeleitoral.ui.common.isRoundOpen
 import com.veronezzi.colaeleitoral.ui.common.picksOutsideBallot
+import com.veronezzi.colaeleitoral.ui.common.tryLocalWrite
 import com.veronezzi.colaeleitoral.ui.navigation.BallotRoute
 import com.veronezzi.colaeleitoral.ui.navigation.roundOf
 import dagger.assisted.Assisted
@@ -25,6 +29,7 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -41,8 +46,8 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 /**
- * A vote of "Meu santinho". [updatedStatus] is the TSE registration status found in the cache
- * when it differs from the one saved with the pick (shown verbatim, ARCHITECTURE.md 4.6).
+ * A vote of "Minha cola". [updatedStatus] is the TSE registration status found in the cache when
+ * it differs from the one saved with the pick (shown verbatim, ARCHITECTURE.md 4.6).
  */
 data class BallotEntry(
     val slot: BallotSlot,
@@ -53,6 +58,9 @@ sealed interface BallotMessage {
     data class Removed(val pick: BallotPick) : BallotMessage
 
     data object Cleared : BallotMessage
+
+    /** A removal, undo or clearing could not be written (disk full, I/O): nothing changed. */
+    data object ChangeFailed : BallotMessage
 }
 
 data class BallotUiState(
@@ -69,17 +77,24 @@ data class BallotUiState(
     val showRoundSwitch: Boolean = false,
     val confirmClear: Boolean = false,
     val message: BallotMessage? = null,
+    /** Saved picks can't be read right now (nothing was deleted): banner with retry. */
+    val picksUnavailable: Boolean = false,
 ) {
     val hasPicks: Boolean get() = entries.any { it.slot.pick != null } || outsidePicks.isNotEmpty()
 }
 
 private data class BallotTransient(val confirmClear: Boolean = false, val message: BallotMessage? = null)
 
+/** The TSE status of a picked candidate now, and the TSE system it came from. */
+private data class CurrentStatus(val text: String, val source: DataSource)
+
 /**
- * "Meu santinho" (ARCHITECTURE.md 4.6): the picks of one election round in urna order, read from
+ * "Minha cola" (ARCHITECTURE.md 4.6): the picks of one election round in urna order, read from
  * the encrypted snapshot, so it works with no network and even with the public cache cleared.
- * While the ballot is open, the candidate lists of the picked offices are refreshed within the TTL
- * to catch status changes (judgments go on until the eve of the election).
+ * Whenever the screen resumes, the candidate lists of the picked offices are refreshed within the
+ * TTL to catch status changes (judgments go on until the eve of the election). A status change is
+ * only reported when both texts come from the same TSE system, compared without case or accents:
+ * open data writes "DEFERIDO" where the API writes "Deferido".
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel(assistedFactory = BallotViewModel.Factory::class)
@@ -99,6 +114,7 @@ class BallotViewModel @AssistedInject constructor(
 
     private val roundNumber = savedStateHandle.getStateFlow(KEY_ROUND, route.round)
     private val transient = MutableStateFlow(BallotTransient())
+    private var refreshJob: Job? = null
 
     private val election: Flow<Election?> = electionRepository.observeElections()
         .map { cached -> cached.value.firstOrNull { it.id == route.electionId } }
@@ -120,7 +136,7 @@ class BallotViewModel @AssistedInject constructor(
     }
 
     /** Current TSE status per picked candidate id, from the detail cache or else the list cache. */
-    private val currentStatuses: Flow<Map<Long, String>> = picks.flatMapLatest { picks ->
+    private val currentStatuses: Flow<Map<Long, CurrentStatus>> = picks.flatMapLatest { picks ->
         if (picks.isEmpty()) {
             flowOf(emptyMap())
         } else {
@@ -130,8 +146,10 @@ class BallotViewModel @AssistedInject constructor(
                         candidateRepository.observeCandidateDetail(route.electionId, pick.candidateId),
                         candidateRepository.observeCandidates(route.electionId, pick.ueCode, pick.officeCode),
                     ) { detail, list ->
-                        val status = detail.value?.candidate?.status?.registration
+                        val fromDetail = detail.value?.candidate?.status?.registration?.let { CurrentStatus(it, detail.source) }
+                        val status = fromDetail
                             ?: list.value.firstOrNull { it.id == pick.candidateId }?.status?.registration
+                                ?.let { CurrentStatus(it, list.source) }
                         pick.candidateId to status
                     }
                 },
@@ -144,8 +162,8 @@ class BallotViewModel @AssistedInject constructor(
         offices,
         picks,
         currentStatuses,
-        transient,
-    ) { (election, roundNumber), offices, picks, statuses, transient ->
+        combine(transient, ballotRepository.observeUnavailable()) { t, unavailable -> t to unavailable },
+    ) { (election, roundNumber), offices, picks, statuses, (transient, unavailable) ->
         val round = roundOf(roundNumber)
         val today = clock.todayInBrasilia()
         val slots = if (offices != null && offices.value.isNotEmpty()) {
@@ -163,8 +181,7 @@ class BallotViewModel @AssistedInject constructor(
             roundDate = election?.dateOf(round),
             entries = slots.map { slot ->
                 val pick = slot.pick
-                val current = pick?.let { statuses[it.candidateId] }
-                BallotEntry(slot = slot, updatedStatus = current?.takeIf { pick?.statusAtSave != it })
+                BallotEntry(slot = slot, updatedStatus = pick?.let { updatedStatusOf(it, statuses[it.candidateId]) })
             },
             outsidePicks = outside,
             canEdit = election?.isRoundOpen(round, today) ?: true,
@@ -174,12 +191,16 @@ class BallotViewModel @AssistedInject constructor(
             } ?: false,
             confirmClear = transient.confirmClear,
             message = transient.message,
+            picksUnavailable = unavailable,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BallotUiState(round = roundOf(route.round)))
 
     init {
-        viewModelScope.launch { refreshPickedLists() }
+        refreshPickedLists()
     }
+
+    /** The screen came back to the foreground: catch status changes published meanwhile. */
+    fun onScreenResumed() = refreshPickedLists()
 
     fun onRoundSelected(round: Round) {
         savedStateHandle[KEY_ROUND] = round.number
@@ -187,13 +208,23 @@ class BallotViewModel @AssistedInject constructor(
 
     fun onRemove(pick: BallotPick) {
         viewModelScope.launch {
-            ballotRepository.removePick(pick.key)
-            transient.update { it.copy(message = BallotMessage.Removed(pick)) }
+            val removed = tryLocalWrite { ballotRepository.removePick(pick.key) } != null
+            transient.update { it.copy(message = if (removed) BallotMessage.Removed(pick) else BallotMessage.ChangeFailed) }
         }
     }
 
     fun onUndoRemove(pick: BallotPick) {
-        viewModelScope.launch { ballotRepository.savePick(pick) }
+        viewModelScope.launch {
+            val result = tryLocalWrite { ballotRepository.savePick(pick) }
+            if (result == null || result is SavePickResult.Failed) {
+                transient.update { it.copy(message = BallotMessage.ChangeFailed) }
+            }
+        }
+    }
+
+    /** "Tentar de novo" on the banner shown while the picks can't be read. */
+    fun onRetryRead() {
+        viewModelScope.launch { tryLocalWrite { ballotRepository.retryRead() } }
     }
 
     fun onClearRequested() {
@@ -207,8 +238,8 @@ class BallotViewModel @AssistedInject constructor(
     fun onClearConfirmed() {
         transient.update { it.copy(confirmClear = false) }
         viewModelScope.launch {
-            ballotRepository.clearBallot(route.electionId, roundOf(roundNumber.value))
-            transient.update { it.copy(message = BallotMessage.Cleared) }
+            val cleared = tryLocalWrite { ballotRepository.clearBallot(route.electionId, roundOf(roundNumber.value)) } != null
+            transient.update { it.copy(message = if (cleared) BallotMessage.Cleared else BallotMessage.ChangeFailed) }
         }
     }
 
@@ -216,13 +247,26 @@ class BallotViewModel @AssistedInject constructor(
         transient.update { it.copy(message = null) }
     }
 
-    private suspend fun refreshPickedLists() {
-        val election = election.first() ?: return
-        val picked = picks.first().map { it.ueCode to it.officeCode }.distinct()
-        for ((ueCode, officeCode) in picked) {
-            candidateRepository.refreshCandidates(election, ueCode, officeCode)
+    /** Within the TTL the repository skips the download, so resuming often costs nothing. */
+    private fun refreshPickedLists() {
+        if (refreshJob?.isActive == true) return
+        refreshJob = viewModelScope.launch {
+            val election = election.first() ?: return@launch
+            val picked = picks.first().map { it.ueCode to it.officeCode }.distinct()
+            for ((ueCode, officeCode) in picked) {
+                candidateRepository.refreshCandidates(election, ueCode, officeCode)
+            }
         }
     }
+
+    /**
+     * The status to report as changed, verbatim, or null. Texts from different TSE systems are
+     * never compared (open data and the API differ in case and sometimes in wording).
+     */
+    private fun updatedStatusOf(pick: BallotPick, current: CurrentStatus?): String? = current
+        ?.takeIf { it.source == pick.source }
+        ?.takeIf { normalizeForSearch(it.text) != normalizeForSearch(pick.statusAtSave) }
+        ?.text
 
     /** The ballot rebuilt from the snapshots alone, when the offices cannot be loaded. */
     private fun slotsFromSnapshots(picks: List<BallotPick>): List<BallotSlot> =

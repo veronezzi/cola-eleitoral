@@ -3,11 +3,14 @@
 #
 # Uso: scripts/check-store-metadata.sh [--release] [DIRETORIO_DO_IDIOMA]
 #   DIRETORIO_DO_IDIOMA  padrão: fastlane/metadata/android/pt-BR
-#   --release            também exige a política de privacidade pronta: sem campos [PREENCHER: ...]
-#                        em docs/privacidade.md e docs/privacidade/index.html, com o e-mail de
-#                        contato no texto e sem os marcadores example.com. O e-mail e a URL vêm de
-#                        COLA_ELEITORAL_CONTACT_EMAIL e COLA_ELEITORAL_PRIVACY_POLICY_URL ou, se vazias,
-#                        de colaEleitoral.contactEmail e colaEleitoral.privacyPolicyUrl (gradle.properties).
+#   --release            também exige a política de privacidade pronta e publicada. Os problemas da
+#                        política, que sem --release são só avisos, viram erros, e a URL pública
+#                        precisa responder (curl -fsSI) com o mesmo conteúdo de docs/privacidade/index.html.
+# Sempre: docs/privacidade/index.html tem de estar atualizado em relação a docs/privacidade.md
+# (scripts/render-privacy-page.py --check) e as duas versões têm de citar o e-mail de contato, a URL
+# pública e o nome do desenvolvedor, sem [PREENCHER: ...] nem marcadores example.com. Esses valores vêm
+# de COLA_ELEITORAL_CONTACT_EMAIL, COLA_ELEITORAL_PRIVACY_POLICY_URL e COLA_ELEITORAL_DEVELOPER_NAME ou,
+# se vazias, de colaEleitoral.contactEmail, .privacyPolicyUrl e .developerName (gradle.properties).
 #
 # Limites conferidos (https://support.google.com/googleplay/android-developer/answer/9859152 e
 # https://support.google.com/googleplay/android-developer/answer/9866151):
@@ -25,7 +28,7 @@ dir=""
 for arg in "$@"; do
   case "$arg" in
     --release) release=1 ;;
-    -h | --help) sed -n '2,20p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h | --help) sed -n '2,22p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) dir="$arg" ;;
   esac
 done
@@ -239,33 +242,82 @@ check_screenshots phoneScreenshots 1
 check_screenshots sevenInchScreenshots 0
 check_screenshots tenInchScreenshots 0
 
-# ------------------------------------------------------------------------------ política (release)
+# ------------------------------------------------------------------------------------- política
 property() { # nome -> valor em gradle.properties
   sed -nE "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*(.*[^[:space:]])[[:space:]]*$/\\1/p" "$root/gradle.properties" | tail -1
 }
 email="${COLA_ELEITORAL_CONTACT_EMAIL:-$(property 'colaEleitoral\.contactEmail')}"
 url="${COLA_ELEITORAL_PRIVACY_POLICY_URL:-$(property 'colaEleitoral\.privacyPolicyUrl')}"
+developer="${COLA_ELEITORAL_DEVELOPER_NAME:-$(property 'colaEleitoral\.developerName')}"
 policy_issue() { if [ "$release" = 1 ]; then err "$*"; else warn "$*"; fi; }
+is_placeholder() { [ -z "$1" ] || [[ "$1" == *example.com* ]]; }
 
-for policy in "$root/docs/privacidade.md" "$root/docs/privacidade/index.html"; do
+if is_placeholder "$email"; then
+  policy_issue "e-mail de contato ainda é marcador (${email:-vazio}); defina colaEleitoral.contactEmail"
+fi
+if is_placeholder "$url"; then
+  policy_issue "URL da política ainda é marcador (${url:-vazia}); defina colaEleitoral.privacyPolicyUrl"
+elif [[ "$url" != https://* ]]; then
+  policy_issue "URL da política precisa começar com https:// ($url)"
+fi
+if [ -z "$developer" ]; then
+  policy_issue "nome do desenvolvedor vazio; defina colaEleitoral.developerName"
+fi
+
+policy_html="$root/docs/privacidade/index.html"
+for policy in "$root/docs/privacidade.md" "$policy_html"; do
   name="${policy#"$root"/}"
   if [ ! -f "$policy" ]; then
     policy_issue "$name: ausente"
     continue
   fi
+  problems=0
   pending=$(grep -c 'PREENCHER' -- "$policy" || true)
   if [ "$pending" -gt 0 ]; then
-    policy_issue "$name: $pending linha(s) com [PREENCHER: ...] (nome e e-mail do responsável)"
+    policy_issue "$name: $pending linha(s) com [PREENCHER: ...]"
+    problems=1
   fi
-  if [ -n "$email" ] && [[ "$email" != *example.com* ]] && ! grep -qF -- "$email" "$policy"; then
-    policy_issue "$name: não contém o e-mail de contato $email (colaEleitoral.contactEmail)"
-  fi
+  # Rótulo|valor|propriedade: cada valor real tem de aparecer no texto da política.
+  for expected in "e-mail de contato|$email|colaEleitoral.contactEmail" \
+    "URL pública|$url|colaEleitoral.privacyPolicyUrl" \
+    "nome do desenvolvedor|$developer|colaEleitoral.developerName"; do
+    IFS='|' read -r label value prop <<< "$expected"
+    if ! is_placeholder "$value" && ! grep -qF -- "$value" "$policy"; then
+      policy_issue "$name: não cita o $label $value ($prop)"
+      problems=1
+    fi
+  done
+  [ "$problems" = 1 ] || ok "$name: preenchida, com e-mail, URL pública e nome do desenvolvedor"
 done
-if [[ "$email" == *example.com* ]] || [ -z "$email" ]; then
-  policy_issue "e-mail de contato ainda é marcador (${email:-vazio}); defina colaEleitoral.contactEmail"
+
+# O HTML publicado é gerado do Markdown que o app embute: os dois precisam dizer o mesmo.
+if ! command -v python3 > /dev/null 2>&1; then
+  policy_issue "python3 ausente: não conferi se docs/privacidade/index.html está atualizado"
+elif sync=$(python3 "$root/scripts/render-privacy-page.py" --check 2>&1); then
+  ok "$sync"
+else
+  err "$sync"
 fi
-if [[ "$url" == *example.com* ]] || [ -z "$url" ]; then
-  policy_issue "URL da política ainda é marcador (${url:-vazia}); defina colaEleitoral.privacyPolicyUrl"
+
+# Só com --release: a página tem de estar no ar, igual à versão do repositório.
+if [ "$release" = 1 ] && ! is_placeholder "$url" && [[ "$url" == https://* ]]; then
+  if ! command -v curl > /dev/null 2>&1; then
+    err "curl ausente: não consegui conferir se a política está publicada em $url"
+  elif status=$(curl -fsSI --max-time 20 -o /dev/null -w '%{http_code}' -- "$url" 2> /dev/null); then
+    ok "política publicada: $url responde HTTP $status"
+    published="$(mktemp)"
+    if ! curl -fsS --max-time 20 -o "$published" -- "$url" 2> /dev/null; then
+      err "política publicada: não consegui baixar $url para comparar"
+    elif [ -f "$policy_html" ] && cmp -s -- "$published" "$policy_html"; then
+      ok "política publicada: igual a docs/privacidade/index.html"
+    else
+      err "a página em $url difere de docs/privacidade/index.html: copie o arquivo para o repositório veronezzi/cola-eleitoral-privacidade (docs/PUBLICACAO.md, seção 7; o GitHub Pages leva alguns minutos para atualizar)"
+    fi
+    rm -f -- "$published"
+  else
+    if [ "${status:-000}" = 000 ]; then status="sem resposta"; else status="HTTP $status"; fi
+    err "política fora do ar: curl -fsSI $url falhou ($status); publique-a antes do release (docs/PUBLICACAO.md, seção 7)"
+  fi
 fi
 
 echo

@@ -1,7 +1,10 @@
-# Meu Santinho: arquitetura e especificação
+# Cola Eleitoral: arquitetura e especificação
 
 Versão 1, escrita em 2026-10-04 (dia do 1º turno das Eleições Gerais 2026) na etapa 1 (pesquisa e
-especificação). Para API e domínio, este documento prevalece sobre o `BRIEF.md`.
+especificação). Para API e domínio, este documento prevalece sobre o `BRIEF.md`. Atualizada em
+2026-10-05: nome Cola Eleitoral e correções das revisões de segurança e de arquitetura (detalhes, vices
+e fotos só em memória, ZIPs de dados abertos nunca em disco, limpeza de 60 dias, permissões do
+manifesto, decisões Q1 a Q5 em 7.2).
 
 **Como ler as marcações de evidência**
 
@@ -77,7 +80,7 @@ Módulo único `:app`, pacote `com.veronezzi.colaeleitoral`, código em `app/src
 | D3 | Regras da urna (ordem, dígitos, votos por cargo) numa tabela de domínio baseada na lei (`OfficeRules`); a API só fornece a lista de cargos e as contagens | A cédula renderiza mesmo sem API |
 | D4 | 2º turno = mesma eleição (mesmo id) + candidatos com `descricaoTotalizacao` "2º turno" | É como o TSE representa (2.4) |
 | D5 | Cliente HTTP honesto: User-Agent do app, sem imitar navegador, sem contornar o Akamai | BRIEF; risco jurídico e de bloqueio; ver 2.6 |
-| D6 | Fotos só sob demanda (detalhe e listas de cargos majoritários), com cache em disco do Coil | Menos carga no TSE e menos dados móveis |
+| D6 | Fotos só sob demanda (detalhe e listas de cargos majoritários), com cache só em memória | Menos carga no TSE e menos dados móveis; os arquivos do app não revelam que fotos foram vistas (5.7) |
 | D7 | Nenhum SDK de terceiros com rede (analytics, crash, anúncios) | LGPD; Data safety sem coleta |
 | D8 | Cada escolha guarda um snapshot completo do candidato | A cola funciona offline mesmo com o cache apagado |
 
@@ -415,12 +418,13 @@ Implementação:
 ### 2.7 Etiqueta de requisições
 
 - OkHttp único (`@Singleton`), compartilhado por Retrofit e Coil: connect 15 s, read 30 s, call 60 s;
-  `Dispatcher.maxRequestsPerHost = 4`; gzip automático do OkHttp.
+  `Dispatcher.maxRequestsPerHost = 4`; gzip automático do OkHttp. O Coil usa esse cliente porque
+  `ColaEleitoralApplication` implementa `SingletonImageLoader.Factory` (2.9).
 - Cabeçalhos: `User-Agent: ColaEleitoral/{versionName} (Android {release}; +{URL da política de
   privacidade})` e `Accept: application/json`. Não enviar `Referer`, `Origin`, `sec-ch-ua*`,
   `Sec-Fetch-*`; não usar WebView para buscar JSON.
-- Allowlist de host num interceptor: só `divulgacandcontas.tse.jus.br` (e `cdn.tse.jus.br` se o plano B
-  for adotado). Qualquer outro host → falha imediata.
+- Allowlist de host num interceptor: só `divulgacandcontas.tse.jus.br` e `cdn.tse.jus.br` (plano B,
+  2.10), para a API, os dados abertos e as fotos. Qualquer outro host → falha imediata.
 - Nada de varredura: lista por (UE, cargo) só quando a tela pede; detalhe só quando o usuário abre;
   nada de polling em segundo plano. "Atualizar" manual limitado a 1 vez por minuto por chave.
 - Logs: nenhum corpo, em nenhum build. Em debug, `HttpLoggingInterceptor.Level.BASIC` (método,
@@ -436,13 +440,20 @@ Banco `public_cache.db`, só com dado público e reconstruível; por isso a migr
 | `ElectionEntity` | `id` | `year`, `name`, `scope`, `round?`, `date?` (ISO) |
 | `MunicipalityEntity` | `code` | `uf`, `name`, `sourceElectionId` |
 | `OfficeEntity` | (`electionId`, `ueCode`, `code`) | `name`, `candidateCount?` |
-| `CandidateEntity` | (`electionId`, `id`); índice (`electionId`, `ueCode`, `officeCode`) | `number`, `ballotName`, `fullName?`, `searchKey` (nome normalizado), `partyAcronym`, `partyNumber?`, `partyName?`, `coalition?`, `registrationStatus`, `totalizationStatus?`, `onBallotStatus?`, `isFit?`, `photoUrl?` |
-| `CandidateDetailEntity` | (`electionId`, `candidateId`) | `coalitionType?`, `coalitionComposition?`, `officialPageUrl`, `photoPublishable?`, `lastUpdate?` |
-| `RunningMateEntity` | (`electionId`, `candidateId`, `position`) | `id?`, `role`, `ballotName`, `fullName?`, `partyAcronym?`, `photoUrl?`, `status?` |
+| `CandidateEntity` | (`electionId`, `id`); índice (`electionId`, `ueCode`, `officeCode`) | `number`, `ballotName`, `fullName?`, `partyAcronym`, `partyNumber?`, `partyName?`, `coalition?`, `registrationStatus`, `totalizationStatus?`, `onBallotStatus?`, `isFit?`, `photoUrl?` |
 | `FetchStateEntity` | `key` | `fetchedAt?`, `lastAttemptAt?`, `lastError?` |
 
+`MunicipalityEntity` também guarda `searchKey` (`normalizeForSearch` do nome, calculado na inserção),
+usado na ordenação do DAO.
+
 Chaves de `FetchStateEntity`: `elections`, `municipalities:{uf}`, `offices:{electionId}:{ueCode}`,
-`candidates:{electionId}:{ueCode}:{officeCode}`, `detail:{electionId}:{candidateId}`.
+`candidates:{electionId}:{ueCode}:{officeCode}`.
+
+**Detalhe e vices não vão para o Room** (S2): o eleitor abre o detalhe logo antes de salvar a
+escolha, e as linhas de detalhe com horário revelariam as escolhas a quem extraísse os arquivos, sem
+quebrar a cifra. Eles ficam em `CandidateDetailMemoryCache`, um LRU só em memória (50 entradas) com o
+próprio estado de atualização, sem linha em `fetch_state`; depois que o processo morre, o detalhe é
+baixado de novo quando a tela abre.
 
 TTL (relógio injetado, `java.time.Clock`):
 
@@ -452,8 +463,8 @@ TTL (relógio injetado, `java.time.Clock`):
 | Municípios | 30 dias | 30 dias |
 | Cargos | 24 h | 6 h |
 | Lista de candidatos | 6 h | 1 h |
-| Detalhe | 6 h | 1 h |
-| Fotos | sem TTL (LRU do Coil) | - |
+| Detalhe (em memória) | 6 h | 1 h |
+| Fotos | só em memória (LRU do Coil), sem cópia em disco | - |
 
 Fluxo:
 1. A tela coleta o `Flow<CachedData<...>>` do repositório: o cache aparece imediatamente.
@@ -466,26 +477,34 @@ Fluxo:
    com "Tentar de novo".
 5. No onboarding, depois de escolher o local, pré-carregar as listas da cédula do eleitor na eleição
    atual (no máximo 7 listas, em sequência), para a cola funcionar offline no dia.
-6. Limpeza: na inicialização, apagar candidatos de eleições que não são a atual nem foram abertas há
-   60 dias. "Limpar dados baixados" nas configurações apaga tudo (inclusive o cache do Coil).
+6. Limpeza (prazo declarado na política, seção 8): na inicialização do app, apagar `candidates`,
+   `offices` e `fetch_state` das eleições que não são a atual e cuja última consulta
+   (`lastAttemptAt`) passou de 60 dias. "Limpar dados baixados" apaga tudo na hora: Room, arquivos
+   derivados dos dados abertos, cache de detalhes e fotos em memória e imagens da cola em
+   `cacheDir/shared/`.
 
 Busca e filtros: a lista de um cargo tem no máximo ~1.500 linhas; o repositório lê tudo da chave e
 aplica `CandidateFilter` em memória (`filteredBy`, em `Dispatchers.Default`). Room FTS não é necessário.
 
 ### 2.9 Imagens
 
-- Coil 3 com o mesmo OkHttp (User-Agent, allowlist, guard). Cache em disco de 64 MB em
-  `cacheDir/image_cache`; a estratégia padrão do Coil 3 ignora `Cache-Control` e sempre grava em disco,
-  então fotos vistas uma vez funcionam offline [VERIFICADO: https://coil-kt.github.io/coil/network/].
+- Coil 3 com o mesmo OkHttp do app (User-Agent, allowlist, guard e limite de conexões por host):
+  `ColaEleitoralApplication` implementa `SingletonImageLoader.Factory` e registra
+  `OkHttpNetworkFetcherFactory(callFactory = { okHttp.get() })`, com o cliente injetado como
+  `dagger.Lazy<OkHttpClient>`. Sem isso, o `coil-network-okhttp` registra por ServiceLoader um
+  `OkHttpClient()` próprio, com User-Agent `okhttp/5.x`, sem allowlist e com cache em disco padrão.
+- **Só cache em memória, sem cache em disco** (S2): a foto aberta no detalhe, logo antes de salvar a
+  escolha, ficaria gravada no aparelho. Consequência aceita: sem internet, aparecem as iniciais no
+  lugar das fotos.
 - Listas: foto só para cargos majoritários (1, 3, 5, 11); nas listas proporcionais, avatar com as
   iniciais do nome de urna, igual para todos (neutralidade e carga no TSE). Detalhe: foto se
   `photoPublishable != false`. Cola: sem fotos.
 - `contentDescription = "Foto de {nome de urna}"`; erro de carregamento → avatar de iniciais.
 
-### 2.10 Plano B: dados abertos do TSE (decisão pendente)
+### 2.10 Plano B: dados abertos do TSE (adotado na v1, Q1)
 
-Se a validação em aparelho (7.3) mostrar que o Akamai bloqueia o app, existe uma fonte oficial que
-respondeu normalmente a este ambiente, fora do Brasil, em 2026-10-04:
+Fonte oficial de reserva para quando o DivulgaCandContas recusa a consulta. Respondeu normalmente a
+este ambiente, fora do Brasil, em 2026-10-04:
 
 - Catálogo CKAN: `https://dadosabertos.tse.jus.br/api/3/action/package_show?id=candidatos-2026`,
   licença "Creative Commons Atribuição" (`license_id: cc-by`), atualização "4 vezes ao dia"
@@ -506,10 +525,14 @@ respondeu normalmente a este ambiente, fora do Brasil, em 2026-10-04:
 - Limitações: sem fotos por candidato (há ZIP de fotos por UF, 15,6 MB em SP), sem link `txLink`,
   status em caixa alta e com texto diferente da API ("DEFERIDO" × "Deferido").
 
-Desenho sugerido, se aprovado: interface `CandidateRemoteSource` com `DivulgaCandContasSource`
-(primária) e `TseOpenDataSource` (só listas de eleições gerais, sem detalhe), escolhida
-automaticamente quando a primária devolve `Blocked`. A UI indica "Fonte: dados abertos do TSE". O
-contrato de domínio já comporta isso (os repositórios não expõem a origem).
+Implementação: interface `CandidateRemoteSource` com `DivulgaCandContasSource` (primária) e
+`TseOpenDataSource` (só listas de eleições gerais, sem detalhe e sem fotos), escolhida
+automaticamente quando a primária devolve `Blocked`. A UI indica "Fonte: dados abertos do TSE", e
+cada escolha guarda a fonte do snapshot (`BallotPick.source`), para a cédula só comparar situações
+vindas da mesma fonte. **O ZIP nunca é gravado** (S5): o app o lê em streaming do corpo da resposta
+e guarda só os dados derivados das colunas usadas (sem CPF, título, e-mail, nascimento, gênero ou
+raça) e o `ETag`, para revalidar com `If-None-Match`. A eleição municipal (ZIP de 64 MB) fica fora da
+v1: mensagem `Blocked` com link para o site oficial.
 
 ---
 
@@ -529,15 +552,15 @@ coroutines 1.11.0): sem erros nem avisos.
 | `model/Office.kt` | `Office`, `OfficeRules` | tabela da 2.4; `maxPicks` (Senado 2 em `ano % 8 == 2`; 2º turno só 1, 3, 11); `defaultCodes` para a cédula sem API |
 | `model/Party.kt` | `Party` | `numberFromCandidateNumber` |
 | `model/Candidate.kt` | `CandidateStatus`, `Candidate`, `RunningMate`, `CandidateDetail` | status literal; `isSecondRoundText` |
-| `model/BallotPick.kt` | `BallotSlotKey`, `BallotPick`, `SavePickResult` | snapshot completo; `DuplicateCandidate` |
+| `model/BallotPick.kt` | `BallotSlotKey`, `BallotPick`, `SavePickResult` | snapshot completo com a fonte (`source: DataSource`); `toString()` sem nome nem número; `DuplicateCandidate` |
 | `model/CandidateFilter.kt` | `SortOrder`, `CandidateFilter`, `FilterOptions`, `normalizeForSearch`, `List<Candidate>.filteredBy` | padrão = todos, por número |
-| `model/AppResult.kt` | `AppError` (Network, Blocked, NotFound, Server, Parsing, Unknown), `AppResult`, `map` | erros sem corpo de resposta |
+| `model/AppResult.kt` | `AppError` (Network, Blocked, NotFound, Server, Parsing, Storage, Unknown), `AppResult`, `map` | erros sem corpo de resposta; `Storage` = disco cheio ou erro de E/S |
 | `model/CachedData.kt` | `CachedData<T>` | `fetchedAt`, `isStale`, `lastError` |
 | `model/UserSettings.kt` | `UserSettings` | `secureScreens = true` por padrão |
 | `repository/ElectionRepository.kt` | eleições, municípios, cargos da cédula, `clearCache` | leitura por Flow do cache + `refresh*(force)` |
 | `repository/CandidateRepository.kt` | listas filtradas, opções de filtro, detalhe | idem |
-| `repository/BallotRepository.kt` | `observeBallot`, `savePick`, `removePick`, `clearBallot`, `deleteAll` | cifrado; nunca logar |
-| `repository/SettingsRepository.kt` | local, onboarding, lembrete, bloqueio, telas protegidas, `clear` | DataStore Preferences |
+| `repository/BallotRepository.kt` | `observeBallot`, `observeUnavailable`, `retryRead`, `savePick`, `removePick`, `clearBallot`, `deleteAll` | cifrado; nunca logar; `observeUnavailable` = escolhas ilegíveis por um momento, sem apagar nada |
+| `repository/SettingsRepository.kt` | local, onboarding, lembrete, bloqueio, telas protegidas, `clear` | DataStore Preferences; as escritas devolvem `AppResult<Unit>` em vez de lançar |
 | `repository/ReminderScheduler.kt` | `schedule`, `cancel`, `cancelAll` | texto genérico, sem escolhas |
 
 Sem classes de caso de uso: a lógica de domínio que não é acesso a dados está em funções puras
@@ -564,7 +587,7 @@ rotas; dados maiores vêm do repositório pelo ViewModel (`SavedStateHandle.toRo
     val electionId: Long, val year: Int, val ueCode: String,
     val officeCode: Int, val candidateId: Long, val round: Int, val slot: Int = 1,
 )
-@Serializable data class BallotRoute(val electionId: Long, val round: Int)      // "Meu santinho"
+@Serializable data class BallotRoute(val electionId: Long, val round: Int)      // "Minha cola"
 @Serializable data class ColaExportRoute(val electionId: Long, val round: Int)
 @Serializable data object SettingsRoute
 @Serializable data object AboutRoute
@@ -574,7 +597,7 @@ rotas; dados maiores vêm do repositório pelo ViewModel (`SavedStateHandle.toRo
 
 Grafo: `OnboardingRoute` → `LocationRoute` → `HomeRoute` (limpa a pilha). Navegação de primeiro
 nível com `NavigationSuiteScaffold` (barra inferior no celular, trilho em telas largas): **Início**
-(`HomeRoute`), **Meu santinho** (`BallotRoute` da eleição e turno atuais), **Sobre** (`AboutRoute`).
+(`HomeRoute`), **Minha cola** (`BallotRoute` da eleição e turno atuais), **Sobre** (`AboutRoute`).
 `CandidateListRoute` e `CandidateDetailRoute` usam `ListDetailPaneScaffold` em telas largas (lista e
 detalhe lado a lado). Sem deep links (privacidade e superfície de ataque). O bloqueio do app não é
 uma rota: é um portão sobre o `NavHost` (4.10).
@@ -582,12 +605,14 @@ uma rota: é um portão sobre o `NavHost` (4.10).
 ### 4.2 Primeira execução
 
 1. **Aviso** (`OnboardingRoute`), antes de qualquer acesso à rede. Texto proposto:
-   > O Meu Santinho é um aplicativo independente. Não tem vínculo com o Tribunal Superior Eleitoral
-   > (TSE), com a Justiça Eleitoral, com nenhum órgão de governo, partido ou candidato. As informações
-   > de candidaturas são públicas e vêm do sistema DivulgaCandContas do TSE
+   > O app Cola Eleitoral é independente. Não tem vínculo com o Tribunal Superior Eleitoral (TSE),
+   > com a Justiça Eleitoral, com nenhum órgão de governo, partido ou candidato. As informações de
+   > candidaturas são públicas e vêm do sistema DivulgaCandContas do TSE
    > (divulgacandcontas.tse.jus.br). Confira sempre no site oficial.
    >
-   > Suas escolhas ficam só neste aparelho, cifradas. Não há conta, anúncio nem rastreamento.
+   > Suas escolhas ficam só neste aparelho, cifradas. Não há conta, anúncio nem rastreamento. Para
+   > mostrar as candidaturas, o app consulta direto o TSE, que recebe o endereço IP e o local
+   > consultado.
 
    Botão "Entendi" grava `acceptedDisclaimerVersion`. Sem logotipos do TSE ou da Justiça Eleitoral e
    sem o Brasão da República em nenhuma tela ou asset.
@@ -604,7 +629,7 @@ uma rota: é um portão sobre o `NavHost` (4.10).
 - Lista dos cargos da cédula em ordem da urna (`observeBallotOffices`): nome do cargo, "4 dígitos",
   e para cada voto a escolha salva (número em caixas + nome de urna + partido) ou "Escolher".
   Senado 2026 aparece como "Senador: 1ª vaga" e "Senador: 2ª vaga". Toque abre `CandidateListRoute`.
-- Botão "Ver meu santinho" e cartão fixo: "Na cabine, leve a cola em papel. Celular, câmera e
+- Botão "Ver minha cola" e cartão fixo: "Na cabine, leve a cola em papel. Celular, câmera e
   relógio inteligente não entram, nem desligados (Lei 9.504/97, art. 91-A; Res. TSE 23.751/2026)."
 - Indicador de atualização e erro conforme 2.8.
 
@@ -628,20 +653,23 @@ uma rota: é um portão sobre o `NavHost` (4.10).
 - Situação do registro (literal), "Consta da urna" (literal) e totalização, quando houver.
 - Vice ou suplentes: nome de urna, papel literal ("Vice-prefeito", "1º Suplente"), partido, foto.
 - "Atualizado pelo TSE em 18/09/2026, 14:39" e o botão **"Ver no site do TSE"** (E7, abre no navegador).
-- Botão principal **"Salvar no meu santinho"**. Se o voto já tem outro candidato: diálogo "Trocar
+- Botão principal **"Salvar na minha cola"**. Se o voto já tem outro candidato: diálogo "Trocar
   FULANO por BELTRANO?". Senado com 2 votos: salva no `slot` da rota; se o candidato já está no outro
   voto, mensagem "Esse candidato já está no outro voto para Senador. Na urna, o segundo voto
-  repetido é anulado." Já salvo: "Remover do meu santinho".
+  repetido é anulado." Já salvo: "Remover da minha cola".
 - Nenhum texto avaliativo. Situação diferente de deferida é mostrada como o TSE publica, sem alerta
   colorido; ao salvar um candidato não apto, aviso neutro: "Situação no TSE: Indeferido. Confira no
   site oficial antes de votar."
 
-### 4.6 Meu santinho
+### 4.6 Minha cola
 
 - Cargos em ordem da urna, um bloco por voto: rótulo ("3. Senador: 1ª vaga"), caixas com os dígitos
   (`digitCount` caixas; vazias se não houver escolha), nome de urna e partido.
 - Lê do `BallotRepository` (snapshot): funciona sem rede. Se o cache tiver status mais novo e
-  diferente de `statusAtSave`, mostra "Situação atualizada no TSE: ..." (literal).
+  diferente de `statusAtSave`, vindo da mesma fonte (`BallotPick.source`) e sem contar diferença de
+  maiúsculas e acentos, mostra "Situação atualizada no TSE: ..." (literal).
+- Se as escolhas não puderem ser lidas por um momento (`observeUnavailable()`, por exemplo Keystore
+  ocupado logo após o boot), mostra um aviso que não apaga nada, com "Tentar de novo" (`retryRead`).
 - Ações: "Imprimir ou salvar PDF", "Compartilhar imagem", "Limpar escolhas" (confirmação), troca de
   turno quando houver 2º turno. Texto: "Suas escolhas ficam só neste aparelho."
 - Acessibilidade: cada bloco é um nó semântico "Senador, primeira vaga: 1 2 3, FULANO, PARTIDO".
@@ -652,7 +680,7 @@ Um `ColaRenderer` desenha num `Canvas` (mesmo código para PDF e bitmap; testáv
 título "Minha cola: {eleição}, {1º/2º} turno, {data}"; uma linha por voto com rótulo, caixas grandes
 dos dígitos (≥ 20 pt, preto no branco) e, se a opção "Mostrar nomes" estiver ligada (padrão), nome de
 urna e partido; rodapé: "Na cabine não é permitido levar celular (Lei 9.504/97, art. 91-A). Confira o
-nome e a foto na urna antes de confirmar." e "Feito com o app Meu Santinho, independente e sem
+nome e a foto na urna antes de confirmar." e "Feito com o app Cola Eleitoral, independente e sem
 vínculo com o TSE. Fonte dos dados: TSE.". Sem QR code, sem marca d'água rastreável.
 
 - **PDF:** `PrintManager.print()` com `PrintDocumentAdapter` próprio que escreve um
@@ -678,15 +706,21 @@ vínculo com o TSE. Fonte dos dados: TSE.". Sem QR code, sem marca d'água rastr
 
 ### 4.9 Sobre, privacidade e licenças
 
-- **Sobre:** o aviso de independência (4.2), "Fonte dos dados: Tribunal Superior Eleitoral,
-  DivulgaCandContas" com link, data da última atualização, como o app escolhe a eleição, versão,
-  nome e contato do desenvolvedor (exigido pela política de deturpação, 6.1).
-- **Política de privacidade:** texto completo no app e o mesmo texto numa URL pública (6.1). Conteúdo
-  mínimo: quem é o desenvolvedor e como contatar; o app não coleta nem compartilha dados pessoais; as
-  consultas vão direto ao TSE, que recebe o IP e a UE consultada como em qualquer visita ao site;
-  escolhas ficam só no aparelho, cifradas, fora de backup; como apagar ("Apagar meus dados" ou
-  desinstalar); sem anúncios, analytics ou rastreamento; dados de candidatos são públicos (LGPD art. 7º,
-  § 3º) e exibidos como o TSE publica.
+- **Sobre:** o aviso de independência (4.2) e o aviso de que a consulta vai ao TSE com o IP e o
+  local, "Fonte dos dados: Tribunal Superior Eleitoral, DivulgaCandContas" com link, data da última
+  atualização, como o app escolhe a eleição, versão, "Desenvolvido por {nome}, sem vínculo com
+  partidos, candidatos ou governo" (`BuildConfig.DEVELOPER_NAME`, de `colaEleitoral.developerName`) e
+  o e-mail de contato (política de deturpação, 6.1).
+- **Política de privacidade:** fonte única em `docs/privacidade.md`. O build copia o arquivo sem
+  alteração para `res/raw/privacy_policy.md` (tarefa `embedPrivacyPolicy`) e a tela o mostra inteiro;
+  `scripts/render-privacy-page.py` gera do mesmo arquivo a página publicada em
+  https://veronezzi.github.io/cola-eleitoral-privacidade/ (repositório público
+  `veronezzi/cola-eleitoral-privacidade`). O Markdown usa só o subconjunto que os dois entendem
+  (título, seções, parágrafos, listas simples, negrito, código e links `<https://...>`), e o script
+  falha com qualquer outra construção. Conteúdo: responsável (veronezzi) e contato; o que fica no
+  aparelho e o que só fica em memória; hosts do TSE e o que recebem (IP, `User-Agent`, local, cargo e
+  candidatura); permissões; bases legais; direitos e como apagar ("Apagar meus dados", "Limpar dados
+  baixados"); prazos, inclusive a limpeza de 60 dias; crianças; segurança; mudanças.
 - **Licenças:** lista estática (`res/raw`) das bibliotecas de código aberto (Apache-2.0) e a atribuição
   dos dados do TSE (Creative Commons Atribuição). Sem plugin que puxe Play Services.
 
@@ -723,7 +757,8 @@ vínculo com o TSE. Fonte dos dados: TSE.". Sem QR code, sem marca d'água rastr
 | Escolhas (`BallotPick`) | **Sensível**: revela opinião política (LGPD art. 5º, II; tratamento só nas hipóteses do art. 11) | `noBackupFilesDir/ballot.enc` | AES-256-GCM, chave no AndroidKeyStore; fora de backup; nunca em log, notificação, analytics ou rede |
 | Local de votação (UF, município) | Pessoal, baixo risco | DataStore Preferences | Armazenamento privado do app; fora de backup; enviado ao TSE só como código de UE no caminho da consulta |
 | Preferências (onboarding, lembrete, bloqueio) | Não pessoal | DataStore Preferences | Fora de backup |
-| Cache de candidaturas (nomes, números, partidos, situação, fotos) | Dado pessoal **público** de candidatos (LGPD art. 7º, §§ 3º e 7º) | Room `public_cache.db`, cache do Coil | Só o necessário à finalidade (informar o eleitor); nada de CPF, título, nascimento, e-mail, raça, gênero, orientação, bens |
+| Cache de candidaturas (listas: nomes, números, partidos, situação) | Dado pessoal **público** de candidatos (LGPD art. 7º, §§ 3º e 7º) | Room `public_cache.db`; no plano B, arquivos derivados dos dados abertos + `ETag` | Só o necessário à finalidade (informar o eleitor); nada de CPF, título, nascimento, e-mail, raça, gênero, orientação, bens; apagado após 60 dias sem uso (2.8) |
+| Detalhes, vices e fotos de candidatos | Público, mas revela quais candidaturas o eleitor abriu | Só na memória do processo (`CandidateDetailMemoryCache`, cache em memória do Coil) | Nunca em disco (S2) |
 | Imagem/PDF da cola | Sensível, criado por ação do usuário | `cacheDir/shared/` (imagem) ou destino escolhido no diálogo de impressão | Aviso antes de compartilhar; arquivo temporário apagado na próxima abertura |
 
 O desenvolvedor não recebe nenhum desses dados (não há servidor). A LGPD não se aplica ao tratamento
@@ -742,15 +777,20 @@ sensível por desenho.
   `"com.veronezzi.colaeleitoral:ballot:v1"`, conteúdo = JSON (kotlinx.serialization) de todas as escolhas.
   IV novo a cada escrita (gerado pelo Keystore). `DataStoreFactory.create(serializer, corruptionHandler,
   produceFile = { context.noBackupFilesDir.resolve("ballot.enc") })`.
-- Falha de decifragem (`AEADBadTagException`, `KeyPermanentlyInvalidatedException`,
-  `UnrecoverableKeyException`, arquivo truncado) → `CorruptionException` → `ReplaceFileCorruptionHandler`
-  troca por um estado vazio e grava um aviso único: "Não foi possível ler as escolhas salvas neste
-  aparelho; elas foram apagadas por segurança."
+- Só corrupção real (`AEADBadTagException`, `KeyPermanentlyInvalidatedException`,
+  `UnrecoverableKeyException`, alias ausente, versão desconhecida, arquivo truncado ou JSON inválido)
+  → `CorruptionException` → `ReplaceFileCorruptionHandler` troca por um estado vazio e grava um aviso
+  único: "Não foi possível ler as escolhas salvas neste aparelho; elas foram apagadas por segurança."
+- Falhas passageiras do Keystore (`ProviderException`, `KeyStoreException` logo após o boot e
+  semelhantes) viram `IOException`: o arquivo fica intacto, `BallotRepository.observeUnavailable()`
+  emite `true` e a UI mostra o aviso com "Tentar de novo" (4.6). A chave só é apagada quando foi
+  invalidada de vez.
 - O androidx.security-crypto (`EncryptedFile`, `EncryptedSharedPreferences`) está descontinuado
   desde a 1.1.0 e não deve ser usado [VERIFICADO: https://developer.android.com/jetpack/androidx/releases/security].
-- "Apagar meus dados" (`BallotRepository.deleteAll` + `SettingsRepository.clear` +
-  `ElectionRepository.clearCache` + cache do Coil): apaga o arquivo e a chave do Keystore e reinicia o
-  onboarding.
+- "Apagar meus dados" (`ReminderScheduler.cancelAll` + `BallotRepository.deleteAll` +
+  `ElectionRepository.clearCache` + caches do Coil + imagens em `cacheDir/shared/` +
+  `SettingsRepository.clear`): cancela o lembrete, apaga o arquivo e a chave do Keystore, os dados
+  baixados e as preferências, e reinicia o onboarding.
 
 ### 5.3 Backup e transferência
 
@@ -763,9 +803,14 @@ sensível por desenho.
 
 - `network_security_config.xml` do scaffold: só HTTPS e só CAs do sistema. Manter.
 - Sem certificate pinning: o TSE usa a CDN do Akamai e troca certificados; um pino errado derrubaria
-  o app no dia da eleição. A allowlist de host (2.7) limita o tráfego a `divulgacandcontas.tse.jus.br`.
+  o app no dia da eleição. A allowlist de host (2.7) limita o tráfego a `divulgacandcontas.tse.jus.br`
+  e `cdn.tse.jus.br`, inclusive o das fotos (o Coil usa o mesmo OkHttp, 2.9).
+- `User-Agent: ColaEleitoral/{versionName} (Android {release}; +{URL da política})`, como diz a
+  política (seção 3).
 - Links externos só para domínios do TSE, abertos com `ACTION_VIEW` no navegador (sem WebView no app).
-- Nenhum outro destino de rede: sem Firebase, sem Play Services, sem fontes baixáveis.
+- Nenhum outro destino de rede: sem Firebase, sem Play Services, sem fontes baixáveis (o
+  `EmojiCompatInitializer` do emoji2, que pediria a fonte de emoji ao Play Services, é removido do
+  `InitializationProvider` no manifesto).
 
 ### 5.5 R8, logs e dependências
 
@@ -773,17 +818,25 @@ sensível por desenho.
   de kotlinx.serialization, Retrofit, Room e Hilt bastam; não adicionar `-keep` amplo.
 - Remover logs em release: `-assumenosideeffects class android.util.Log { public static int v(...);
   public static int d(...); public static int i(...); }`. Nenhum `Log` com dados de escolha em nenhum
-  build; nenhum `toString()` de `BallotPick` em mensagens de erro.
-- Conferir o manifesto mesclado: remover permissões que bibliotecas adicionem sem uso
-  (`com.google.android.gms.permission.AD_ID`, `FOREGROUND_SERVICE` se aparecer) com
-  `tools:node="remove"`. Esperado: `INTERNET`, `POST_NOTIFICATIONS`, `USE_BIOMETRIC`, e as do WorkManager
-  (`WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED`, `ACCESS_NETWORK_STATE`).
-- Só código Kotlin/Java: sem `.so` no APK, o que atende o requisito de páginas de 16 KB; conferir com
-  `zipalign -c -P 16 -v 4` e o APK Analyzer (6.1).
+  build; `BallotPick.toString()` não mostra nome nem número. Em debug, `HttpLoggingInterceptor` no
+  nível `BASIC`.
+- Manifesto mesclado de release com uma lista fechada de permissões: `INTERNET`,
+  `ACCESS_NETWORK_STATE`, `POST_NOTIFICATIONS`, `USE_BIOMETRIC`, `USE_FINGERPRINT`, `WAKE_LOCK`,
+  `RECEIVE_BOOT_COMPLETED` e a permissão de assinatura do AndroidX
+  `com.veronezzi.colaeleitoral.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` (protege receivers
+  registrados em tempo de execução). `FOREGROUND_SERVICE` e o `SystemForegroundService` do WorkManager
+  saem com `tools:node="remove"`, assim como o `EmojiCompatInitializer` (5.4).
+  `scripts/check-merged-manifest.sh`, no CI, falha com qualquer permissão fora da lista. A política de
+  privacidade (seção 5) explica cada uma.
+- Bibliotecas nativas: o APK de release tem `libandroidx.graphics.path.so` (androidx.graphics, via
+  Compose) e `libdatastore_shared_counter.so` (DataStore), nas 4 ABIs. As duas já vêm alinhadas a
+  16 KB (`p_align` 16384), e o APK passa em `zipalign -c -P 16 -v 4`, o que atende o requisito de
+  páginas de 16 KB (P13). Conferir de novo ao atualizar dependências (APK Analyzer ou o mesmo
+  `zipalign`).
 
 ### 5.6 Tela, notificações e área de transferência
 
-- `secureScreens` (padrão ligado): `FLAG_SECURE` nas telas Meu santinho, cola e detalhe com escolha
+- `secureScreens` (padrão ligado): `FLAG_SECURE` nas telas Minha cola, cola e detalhe com escolha
   salva; no Android 13+ também `setRecentsScreenshotEnabled(false)`. A geração da imagem da cola não
   depende de captura de tela, então o compartilhamento continua funcionando.
 - Notificações nunca citam candidatos ou números (4.8).
@@ -795,7 +848,7 @@ sensível por desenho.
 |---|---|
 | Alguém com o celular desbloqueado vê as escolhas | Bloqueio opcional; `FLAG_SECURE`; nada em notificações |
 | Backup na nuvem ou cópia entre aparelhos vaza escolhas | Backup desligado e excluído; arquivo cifrado com chave não exportável |
-| Extração de arquivos (root, perícia) | Cifra AES-GCM em repouso, além da criptografia de arquivos do Android |
+| Extração de arquivos (root, perícia) | Cifra AES-GCM em repouso, além da criptografia de arquivos do Android; detalhes, vices e fotos só em memória, para que o cache não revele quais candidaturas foram abertas antes de salvar; ZIPs com dados pessoais de candidatos nunca gravados |
 | Interceptação de rede | HTTPS com CAs do sistema; nenhuma escolha trafega |
 | Dado do TSE manipulado/inesperado | Parser tolerante; allowlist de host; textos exibidos como texto puro; URLs de foto montadas pelo app |
 | Engenharia social pelo compartilhamento | Aviso antes do primeiro compartilhamento; opção "Mostrar nomes" desligável |
@@ -813,15 +866,15 @@ sensível por desenho.
 | P2 | Conta pessoal criada após 13/11/2023: teste fechado com ≥ 12 testadores inscritos por ≥ 14 dias seguidos antes de pedir produção; análise costuma levar até 7 dias | Planejar o teste fechado já (7.2, Q2) | https://support.google.com/googleplay/android-developer/answer/14151465 |
 | P3 | Verificação de desenvolvedor Android: identidade verificada e pacote registrado; obrigatória no Brasil desde 30/09/2026; instalação por adb/Android Studio não é afetada | Verificar a conta e registrar `com.veronezzi.colaeleitoral` (ID definitivo após o 1º upload) | https://android-developers.googleblog.com/2026/06/android-developer-verification.html ; https://support.google.com/googleplay/android-developer/answer/17134731 |
 | P4 | Informação de governo sem afiliação: fontes fáceis de ver na descrição e na página da loja; deixar claro que o app não representa governo nem entidade política; preencher a declaração "Apps governamentais" | Aviso + link do TSE na descrição da loja, na 1ª execução e em Sobre; declarar "não é app governamental" | https://support.google.com/googleplay/android-developer/answer/9514050 |
-| P5 | Deturpação: em conteúdo político, transparência extra sobre quem é o desenvolvedor e suas afiliações; nome e contato corretos | Nome e contato do desenvolvedor em Sobre e na loja; declarar ausência de afiliação | https://support.google.com/googleplay/android-developer/answer/9888689 |
+| P5 | Deturpação: em conteúdo político, transparência extra sobre quem é o desenvolvedor e suas afiliações; nome e contato corretos | "Desenvolvido por veronezzi, sem vínculo com partidos, candidatos ou governo" em Sobre, na política e na descrição da loja; na conta pessoal, o Google mostra também o nome legal e o país | https://support.google.com/googleplay/android-developer/answer/9888689 |
 | P6 | Falsificação de identidade: proibido usar emblema nacional ou marca de governo sugerindo afiliação | Sem Brasão, sem logos do TSE/Justiça Eleitoral; ícone e nome próprios | https://support.google.com/googleplay/android-developer/answer/9888374 |
 | P7 | Comportamento enganoso: proibido conteúdo comprovadamente falso que interfira na votação ou sobre resultados | Só dados do TSE, literais, com data e link; regras de votação citam a lei | https://support.google.com/googleplay/android-developer/answer/9888077 |
-| P8 | Política de privacidade no campo do Play Console e dentro do app; URL pública, ativa, sem geobloqueio, não PDF; com contato, dados tratados, segurança, retenção e exclusão | Tela no app + página pública (Q3) | https://support.google.com/googleplay/android-developer/answer/10144311 |
+| P8 | Política de privacidade no campo do Play Console e dentro do app; URL pública, ativa, sem geobloqueio, não PDF; com contato, dados tratados, segurança, retenção e exclusão | Texto completo embutido de `docs/privacidade.md` + página gerada do mesmo arquivo em https://veronezzi.github.io/cola-eleitoral-privacidade/ (Q3); `check-store-metadata.sh --release` confere se está no ar e igual | https://support.google.com/googleplay/android-developer/answer/10144311 |
 | P9 | Formulário Data safety obrigatório mesmo sem coleta; dado tratado só no aparelho não é declarado | Declarar "nenhum dado coletado nem compartilhado" (Q4) | https://support.google.com/googleplay/android-developer/answer/10787469 |
 | P10 | Seções de conteúdo do app: política de privacidade, anúncios, acesso (login), público-alvo, classificação, apps de notícias; declarações de saúde e de recursos financeiros para todo app | Anúncios: não; acesso: sem login; notícias: não; saúde: nenhum recurso; financeiro: nenhum | https://support.google.com/googleplay/android-developer/answer/9859455 ; https://support.google.com/googleplay/android-developer/answer/14738291 ; https://support.google.com/googleplay/android-developer/answer/13849271 |
 | P11 | Público-alvo: incluir menores de 13 aplica a política Famílias; declarar anúncios antes | Público 16-17 e 18+ (voto facultativo aos 16); sem anúncios | https://support.google.com/googleplay/android-developer/answer/9867159 |
 | P12 | Questionário de classificação indicativa (IARC) obrigatório | Responder: sem violência, sem conteúdo gerado por usuário, sem compras | https://support.google.com/googleplay/android-developer/answer/9859655 |
-| P13 | Páginas de memória de 16 KB para apps com target Android 15+ (novos apps e atualizações desde 01/11/2025) | Só Kotlin/Java, sem `.so`; checar APK Analyzer e `zipalign -c -P 16 -v 4` | https://developer.android.com/guide/practices/page-sizes ; https://android-developers.googleblog.com/2025/05/prepare-play-apps-for-devices-with-16kb-page-size.html |
+| P13 | Páginas de memória de 16 KB para apps com target Android 15+ (novos apps e atualizações desde 01/11/2025) | O código do app é só Kotlin; as duas `.so` de bibliotecas (5.5) já vêm alinhadas a 16 KB; checar com APK Analyzer e `zipalign -c -P 16 -v 4` a cada atualização de dependências | https://developer.android.com/guide/practices/page-sizes ; https://android-developers.googleblog.com/2025/05/prepare-play-apps-for-devices-with-16kb-page-size.html |
 | P14 | Qualidade técnica: crash percebido < 1,09%, ANR < 0,47%, wake locks parciais excessivos < 5%; a partir de fev/2027, otimização mínima de 25% (apps com > 10 MB de DEX) | R8 ligado; nada de wake lock próprio; WorkManager só para o lembrete | https://support.google.com/googleplay/android-developer/answer/17492799 |
 | P15 | Textos da loja: nome ≤ 30, descrição curta ≤ 80, completa ≤ 4.000 caracteres; sem emoji, sem MAIÚSCULAS fora da marca, sem alegação de ranking/preço/promoção, sem depoimentos anônimos | Rascunho em 6.3 | https://support.google.com/googleplay/android-developer/answer/9859152 ; https://support.google.com/googleplay/android-developer/answer/9898842 |
 | P16 | Gráficos: ícone 512 × 512 PNG 32 bits ≤ 1 MB; imagem de destaque 1024 × 500 JPEG ou PNG 24 bits sem alfa; ≥ 2 capturas, 320 a 3.840 px, lado maior ≤ 2× o menor (≥ 4 com ≥ 1080 px para destaque); sem "melhor", "#1", "top" | Capturas reais do app, sem chamadas promocionais | https://support.google.com/googleplay/android-developer/answer/9866151 |
@@ -849,12 +902,14 @@ sensível por desenho.
 
 ### 6.3 Rascunho da página da loja (pt-BR)
 
-- **Nome (28):** `Meu Santinho: cola eleitoral`
+Textos finais em `fastlane/metadata/android/pt-BR/`, validados por `scripts/check-store-metadata.sh`.
+
+- **Nome (14):** `Cola Eleitoral`
 - **Descrição curta (69):** `Monte sua cola eleitoral com dados públicos do TSE. App independente.`
-- **Descrição completa, 1º parágrafo (obrigatório pela P4):** "O Meu Santinho é um aplicativo
-  independente, sem vínculo com o Tribunal Superior Eleitoral (TSE), a Justiça Eleitoral, órgãos de
-  governo, partidos ou candidatos. Os dados de candidaturas vêm do sistema público DivulgaCandContas do
-  TSE: https://divulgacandcontas.tse.jus.br/divulga/". Depois: o que o app faz, a lembrança de que o
+- **Descrição completa, 1º parágrafo (obrigatório pela P4):** "O app Cola Eleitoral é independente:
+  foi criado pelo desenvolvedor veronezzi, sem vínculo com o Tribunal Superior Eleitoral (TSE), a
+  Justiça Eleitoral, órgãos de governo, partidos ou candidatos.", seguido da fonte dos dados com o
+  link https://divulgacandcontas.tse.jus.br/divulga/. Depois: o que o app faz, a lembrança de que o
   celular não entra na cabine, privacidade (sem conta, sem anúncios, escolhas só no aparelho).
 - **Categoria:** Ferramentas (evitar "Notícias e revistas").
 
@@ -874,25 +929,30 @@ sensível por desenho.
 | R6 | Situação de registro muda (julgamentos até a véspera) e a cola fica velha | média | médio | TTL de 1 h na semana da eleição; a cédula compara com o status mais novo e mostra a mudança literal |
 | R7 | Escolhas perdidas (chave invalidada, troca de aparelho, desinstalação) | baixa | médio | Explicar "ficam só neste aparelho"; o próprio usuário pode imprimir ou guardar a imagem |
 | R8 | Vazamento por compartilhamento, captura ou notificação | baixa | alto | Aviso antes de compartilhar; `FLAG_SECURE`; notificação genérica |
-| R9 | Nome: já existe o projeto web "Meu Santinho 2026" (https://github.com/Meu-Santinho/meu-santinho/blob/main/web/README.md); "santinho" é o nome popular do material de campanha | média | baixo | Decisão do usuário (Q5) antes do 1º upload |
+| R9 | Conflito de nome | resolvido | - | O app se chama Cola Eleitoral (Q5); o motivo da troca está no histórico do nome em `PUBLICACAO.md` |
 | R10 | Formato do link oficial (E7) muda no SPA do TSE | baixa | baixo | Preferir `txLink` da própria API; fallback para a home |
 | R11 | Listas grandes (1.431 itens) e respostas de ~3 MB em aparelhos fracos | média | baixo | Parse em `Dispatchers.IO`, inserção em lote, `LazyColumn` com chaves, filtro em memória fora da main |
 
 ### 7.2 Decisões para o usuário
 
-- **Q1. Plano B de dados abertos (2.10).** Recomendação: deixar a interface `CandidateRemoteSource`
-  pronta agora e implementar a fonte de dados abertos só se o teste 7.3 mostrar bloqueio. É a única
-  alternativa legítima conhecida; a "ponte" por WebView/página do TSE e a impersonação de TLS estão
-  descartadas.
-- **Q2. Conta do Play e prazo.** Conta pessoal ou de organização? Criada antes ou depois de
-  13/11/2023? Meta realista: teste fechado durante o 2º turno de 2026, produção para 2028.
-- **Q3. Política de privacidade e contato.** URL pública (por exemplo GitHub Pages do repositório) e
-  e-mail de contato do desenvolvedor para a loja e para a tela Sobre.
-- **Q4. Data safety.** Recomendação: "nenhum dado coletado nem compartilhado" (escolhas só no aparelho;
-  o código da UF/município vai ao TSE só para consultar dado público). Se preferir uma postura mais
-  conservadora: declarar "Localização aproximada: coletada, não compartilhada, necessária para o
-  funcionamento".
-- **Q5. Nome do app** ("Meu Santinho" ou alternativa) e o `applicationId`, permanente após o 1º upload.
+Decididas (a execução está em `PUBLICACAO.md`):
+
+- **Q1. Plano B de dados abertos (2.10): implementado na v1** para listas de eleições gerais, sem
+  fotos; a eleição municipal fica fora da v1. A "ponte" por WebView/página do TSE e a impersonação de
+  TLS continuam descartadas.
+- **Q2. Conta do Play: pessoal e nova**, com o Gmail do desenvolvedor. Exige teste fechado com 12
+  testadores por 14 dias; meta: teste fechado durante o 2º turno de 2026, produção em novembro de 2026
+  e o app pronto para 2028.
+- **Q3. Política e contato:** responsável **veronezzi**, e-mail **veronezzi14@gmail.com**, política em
+  https://veronezzi.github.io/cola-eleitoral-privacidade/ (repositório público próprio; o código fica
+  num repositório privado). Os três valores vêm de `colaEleitoral.*` em `gradle.properties`.
+- **Q4. Data safety:** "nenhum dado coletado nem compartilhado"; a alternativa conservadora está em
+  `data-safety.md`.
+- **Q5. Nome e pacote:** **Cola Eleitoral**, `com.veronezzi.colaeleitoral` (permanente após o 1º
+  upload).
+
+Ainda em aberto:
+
 - **Q6. Voto de legenda, branco e nulo na cola.** A lei admite legenda em cargos proporcionais; sugestão
   para a v1.1: permitir só legenda (2 dígitos do partido), sem branco/nulo.
 - **Q7. Eleições suplementares** (`eleicao/suplementares/{ano}/{uf}`): fora da v1?

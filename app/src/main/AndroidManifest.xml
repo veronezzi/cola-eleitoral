@@ -2,9 +2,22 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Apenas estas duas permissões: dados públicos do TSE e o lembrete opcional do dia da eleição. -->
+    <!--
+        Permissões: dados públicos do TSE (INTERNET), o lembrete opcional do dia da eleição
+        (POST_NOTIFICATIONS) e a troca de rede, que libera uma nova consulta depois de uma recusa
+        do TSE (ACCESS_NETWORK_STATE). O manifesto mesclado também recebe USE_BIOMETRIC e
+        USE_FINGERPRINT (androidx.biometric), WAKE_LOCK e RECEIVE_BOOT_COMPLETED (WorkManager) e a
+        permissão de assinatura DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION (androidx.core). Nada além
+        disso: scripts/check-merged-manifest.sh falha no CI se aparecer outra.
+    -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- O WorkManager declara serviço em primeiro plano, que o lembrete não usa. -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE"
+        tools:node="remove" />
 
     <!--
         Os votos salvos revelam opinião política (dado sensível, LGPD art. 11): nada sai do
@@ -53,8 +66,11 @@
 
         <!--
             WorkManager é configurado pela ColaEleitoralApplication (Configuration.Provider com o
-            HiltWorkerFactory), então o inicializador padrão sai. O InitializationProvider continua
-            para os outros inicializadores do App Startup (ProfileInstaller, lifecycle-process).
+            HiltWorkerFactory), então o inicializador padrão sai. O EmojiCompatInitializer (emoji2,
+            vindo do Compose) também sai: ele pediria a fonte de emoji ao provedor de fontes do
+            Google Play Services, e o app não baixa fontes (ARCHITECTURE.md 5.4). O
+            InitializationProvider continua para os outros inicializadores do App Startup
+            (ProfileInstaller, lifecycle-process).
         -->
         <provider
             android:name="androidx.startup.InitializationProvider"
@@ -65,7 +81,15 @@
                 android:name="androidx.work.WorkManagerInitializer"
                 android:value="androidx.startup"
                 tools:node="remove" />
+            <meta-data
+                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+                tools:node="remove" />
         </provider>
+
+        <!-- O lembrete é um trabalho curto, sem serviço em primeiro plano (ARCHITECTURE.md 5.5). -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            tools:node="remove" />
     </application>
 
 </manifest>

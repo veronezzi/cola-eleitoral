@@ -35,8 +35,12 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -82,7 +86,6 @@ data class CandidateListUiState(
     val slot: Int,
     val maxPicks: Int,
     val isSecondRound: Boolean,
-    val query: String = "",
     val filter: CandidateFilter = CandidateFilter(),
     val options: FilterOptions = FilterOptions(emptyList(), emptyList()),
     val offices: List<Office> = emptyList(),
@@ -105,8 +108,10 @@ private data class ListRefresh(val isRefreshing: Boolean = false, val error: App
 /**
  * Every candidate the TSE lists for one office and unit (ARCHITECTURE.md 4.4). Default order is
  * by number; the other orders are alphabetical. Nothing is ranked, highlighted or recommended:
- * the user's own pick is only marked as such. Search is debounced (250 ms) and filtering runs on
- * [UiDispatchers.default] over the cached list.
+ * the user's own pick is only marked as such. The search text is plain Compose state written
+ * synchronously ([query]), so the field never lags behind typing; the filter reads it debounced
+ * (250 ms) and runs on [UiDispatchers.default] over the cached list. Resuming the screen refreshes
+ * the list within the TTL.
  */
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel(assistedFactory = CandidateListViewModel.Factory::class)
@@ -126,14 +131,19 @@ class CandidateListViewModel @AssistedInject constructor(
 
     private val round: Round = roundOf(route.round)
     private val refresh = MutableStateFlow(ListRefresh())
+    private var refreshJob: Job? = null
 
-    private val query = savedStateHandle.getStateFlow(KEY_QUERY, "")
+    /** Text of the search field. Also kept in the [SavedStateHandle] for process death. */
+    var query: String by mutableStateOf(savedStateHandle.get<String>(KEY_QUERY).orEmpty())
+        private set
+
+    private val savedQuery = savedStateHandle.getStateFlow(KEY_QUERY, "")
     private val parties = savedStateHandle.getStateFlow(KEY_PARTIES, arrayListOf<String>())
     private val statuses = savedStateHandle.getStateFlow(KEY_STATUSES, arrayListOf<String>())
     private val onlyRunoff = savedStateHandle.getStateFlow(KEY_ONLY_RUNOFF, round == Round.SECOND)
     private val sort = savedStateHandle.getStateFlow(KEY_SORT, SortOrder.NUMBER.name)
 
-    private val debouncedQuery: Flow<String> = query
+    private val debouncedQuery: Flow<String> = savedQuery
         .debounce { text -> if (text.isEmpty()) 0L else SEARCH_DEBOUNCE_MILLIS }
         .distinctUntilChanged()
 
@@ -173,12 +183,12 @@ class CandidateListViewModel @AssistedInject constructor(
     private val picks = ballotRepository.observeBallot(route.electionId, round)
 
     val uiState: StateFlow<CandidateListUiState> = combine(
-        combine(filtered, filter, query) { filtered, filter, query -> Triple(filtered, filter, query) },
+        combine(filtered, filter) { filtered, filter -> filtered to filter },
         candidateRepository.observeFilterOptions(route.electionId, route.ueCode, route.officeCode),
         offices,
         combine(picks, location) { picks, location -> picks to location },
         refresh,
-    ) { (filtered, filter, query), options, offices, (picks, location), refresh ->
+    ) { (filtered, filter), options, offices, (picks, location), refresh ->
         val (cached, list) = filtered
         val office = offices.firstOrNull { it.code == route.officeCode }
         val samePick = picks.firstOrNull { it.officeCode == route.officeCode && it.slot == route.slot }
@@ -198,7 +208,6 @@ class CandidateListViewModel @AssistedInject constructor(
             slot = route.slot,
             maxPicks = office?.maxPicks ?: OfficeRules.maxPicks(route.officeCode, route.year, round),
             isSecondRound = round == Round.SECOND,
-            query = query,
             filter = filter,
             options = options,
             offices = offices,
@@ -243,6 +252,7 @@ class CandidateListViewModel @AssistedInject constructor(
     }
 
     fun onQueryChange(text: String) {
+        query = text
         savedStateHandle[KEY_QUERY] = text
     }
 
@@ -271,14 +281,24 @@ class CandidateListViewModel @AssistedInject constructor(
 
     fun onRefresh() = refresh(force = true)
 
+    /** Back from the background: refresh within the TTL (the repository skips fresh data). */
+    fun onScreenResumed() = refresh(force = false)
+
+    /** One refresh at a time: a retry while one is running waits for its result. */
     private fun refresh(force: Boolean) {
-        viewModelScope.launch {
+        if (refreshJob?.isActive == true) return
+        refreshJob = viewModelScope.launch {
             refresh.update { ListRefresh(isRefreshing = true) }
-            val election = electionRepository.observeElections().first().value
-                .firstOrNull { it.id == route.electionId }
-                ?: fallbackElection()
-            val result = candidateRepository.refreshCandidates(election, route.ueCode, route.officeCode, force)
-            refresh.update { ListRefresh(error = (result as? AppResult.Failure)?.error) }
+            var error: AppError? = null
+            try {
+                val election = electionRepository.observeElections().first().value
+                    .firstOrNull { it.id == route.electionId }
+                    ?: fallbackElection()
+                val result = candidateRepository.refreshCandidates(election, route.ueCode, route.officeCode, force)
+                error = (result as? AppResult.Failure)?.error
+            } finally {
+                refresh.update { ListRefresh(error = error) }
+            }
         }
     }
 

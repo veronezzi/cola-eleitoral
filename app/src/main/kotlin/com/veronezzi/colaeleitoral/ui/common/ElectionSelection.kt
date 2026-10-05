@@ -11,7 +11,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * The election the user picked in the Home selector, shared by Home and the "Meu santinho" tab.
+ * The election the user picked in the Home selector, shared by Home and the "Minha cola" tab.
  * Kept only for the app session: on the next start the app opens with the current election again
  * ([ElectionCalendar.currentElection]). Null means "the current election".
  */

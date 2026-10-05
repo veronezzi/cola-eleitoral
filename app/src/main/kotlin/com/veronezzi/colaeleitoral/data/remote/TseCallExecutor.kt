@@ -4,7 +4,9 @@ import com.veronezzi.colaeleitoral.core.network.DisallowedHostException
 import com.veronezzi.colaeleitoral.core.network.TseBlockedException
 import com.veronezzi.colaeleitoral.core.network.TseEmptyBodyException
 import com.veronezzi.colaeleitoral.core.network.TseHttpStatusException
+import com.veronezzi.colaeleitoral.core.network.TseUnexpectedFormatException
 import com.veronezzi.colaeleitoral.core.network.TseUnusableResponseException
+import com.veronezzi.colaeleitoral.data.local.LocalStorageException
 import com.veronezzi.colaeleitoral.domain.model.AppError
 import com.veronezzi.colaeleitoral.domain.model.AppResult
 import kotlinx.coroutines.CancellationException
@@ -77,7 +79,8 @@ class TseCallExecutor(
         is DisallowedHostException, is TseUnusableResponseException -> Outcome(AppError.Unknown(null), null)
         is HttpException -> httpOutcome(e.code(), attempt, retryOnBadRequest)
         is TseHttpStatusException -> httpOutcome(e.httpCode, attempt, retryOnBadRequest)
-        is SerializationException -> Outcome(AppError.Parsing, null)
+        is SerializationException, is TseUnexpectedFormatException -> Outcome(AppError.Parsing, null)
+        is LocalStorageException -> Outcome(AppError.Storage, null)
         is IOException -> Outcome(AppError.Network, backoff(attempt))
         else -> Outcome(AppError.Unknown(e), null)
     }

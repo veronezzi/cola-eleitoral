@@ -3,6 +3,7 @@ package com.veronezzi.colaeleitoral.ui.screens.ballot
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
 import com.veronezzi.colaeleitoral.domain.model.CachedData
+import com.veronezzi.colaeleitoral.domain.model.DataSource
 import com.veronezzi.colaeleitoral.domain.model.OfficeRules
 import com.veronezzi.colaeleitoral.domain.model.UserSettings
 import com.veronezzi.colaeleitoral.ui.navigation.BallotRoute
@@ -20,6 +21,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.io.IOException
+import java.time.Instant
 
 class BallotViewModelTest {
     @get:Rule
@@ -72,6 +75,86 @@ class BallotViewModelTest {
             val entry = expectMostRecentItem().entries.first { it.slot.key == "5:1" }
             assertEquals("Deferido com recurso", entry.updatedStatus)
         }
+    }
+
+    @Test
+    fun `Deferido and DEFERIDO from different TSE systems are not a status change`() = runTest {
+        val saved = UiTestData.senators[1]
+        // Saved on a network where only the open data answered ("DEFERIDO"), seen again via the API.
+        ballot.picks.value = listOf(UiTestData.pick(saved, slot = 1, statusAtSave = "DEFERIDO", source = DataSource.TSE_OPEN_DATA))
+        candidates.setCandidates(ELECTION_ID, "SP", OfficeRules.SENATOR, listOf(saved.copy(status = saved.status.copy(registration = "Deferido"))))
+        viewModel().uiState.test {
+            assertNull(expectMostRecentItem().entries.first { it.slot.key == "5:1" }.updatedStatus)
+        }
+    }
+
+    @Test
+    fun `texts from different TSE systems are never compared, even when they differ`() = runTest {
+        val saved = UiTestData.senators[1]
+        ballot.picks.value = listOf(UiTestData.pick(saved, slot = 1, statusAtSave = "Deferido"))
+        candidates.listFlow(ELECTION_ID, "SP", OfficeRules.SENATOR).value = CachedData(
+            listOf(saved.copy(status = saved.status.copy(registration = "INDEFERIDO COM RECURSO"))),
+            Instant.EPOCH,
+            isStale = false,
+            source = DataSource.TSE_OPEN_DATA,
+        )
+        viewModel().uiState.test {
+            assertNull(expectMostRecentItem().entries.first { it.slot.key == "5:1" }.updatedStatus)
+        }
+    }
+
+    @Test
+    fun `the same system is compared without case or accents`() = runTest {
+        val saved = UiTestData.senators[1]
+        ballot.picks.value = listOf(UiTestData.pick(saved, slot = 1, statusAtSave = "DEFERIDO", source = DataSource.TSE_OPEN_DATA))
+        candidates.listFlow(ELECTION_ID, "SP", OfficeRules.SENATOR).value = CachedData(
+            listOf(saved.copy(status = saved.status.copy(registration = "Deferido"))),
+            Instant.EPOCH,
+            isStale = false,
+            source = DataSource.TSE_OPEN_DATA,
+        )
+        viewModel().uiState.test {
+            assertNull(expectMostRecentItem().entries.first { it.slot.key == "5:1" }.updatedStatus)
+        }
+    }
+
+    @Test
+    fun `unreadable picks show the banner, keep the ballot and retry on request`() = runTest {
+        ballot.unavailable.value = true
+        val vm = viewModel()
+        vm.uiState.test {
+            val state = expectMostRecentItem()
+            assertTrue(state.picksUnavailable)
+            assertEquals(6, state.entries.size)
+            vm.onRetryRead()
+            assertEquals(1, ballot.retryReadCalls)
+            ballot.unavailable.value = false
+            assertFalse(expectMostRecentItem().picksUnavailable)
+        }
+    }
+
+    @Test
+    fun `a removal that can't be written is reported and changes nothing`() = runTest {
+        val pick = UiTestData.pick(UiTestData.senators[1], slot = 1)
+        ballot.picks.value = listOf(pick)
+        ballot.writeFailure = IOException("ENOSPC")
+        val vm = viewModel()
+        vm.uiState.test {
+            vm.onRemove(pick)
+            assertEquals(BallotMessage.ChangeFailed, expectMostRecentItem().message)
+            vm.onMessageShown()
+            vm.onClearConfirmed()
+            assertEquals(BallotMessage.ChangeFailed, expectMostRecentItem().message)
+        }
+        assertEquals(listOf(pick), ballot.picks.value)
+    }
+
+    @Test
+    fun `resuming refreshes the picked lists again`() = runTest {
+        ballot.picks.value = listOf(UiTestData.pick(UiTestData.senators[1], slot = 1))
+        val vm = viewModel()
+        vm.onScreenResumed()
+        assertEquals(2, candidates.refreshedLists.size)
     }
 
     @Test

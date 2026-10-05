@@ -18,6 +18,11 @@ data class BallotSlotKey(
  * @property slot 1-based vote index, up to [Office.maxPicks].
  * @property candidateNumber exactly [digitCount] digits, as typed on the urna.
  * @property statusAtSave TSE registration status text when the pick was saved.
+ * @property source TSE system that served the snapshot, so [statusAtSave] is only compared with a
+ * status from the same source (open data writes "DEFERIDO", the API "Deferido"). Picks saved
+ * before this field existed read as [DataSource.DIVULGA_CAND_CONTAS].
+ *
+ * [toString] is redacted: it never prints who was picked, only the slot it fills.
  */
 data class BallotPick(
     val electionId: Long,
@@ -37,8 +42,12 @@ data class BallotPick(
     val runningMateNames: List<String>,
     val statusAtSave: String,
     val savedAt: Instant,
+    val source: DataSource = DataSource.DIVULGA_CAND_CONTAS,
 ) {
     val key: BallotSlotKey get() = BallotSlotKey(electionId, round, officeCode, slot)
+
+    /** Redacted: a pick reveals political opinion, so logs and crash messages never show it. */
+    override fun toString(): String = "BallotPick(electionId=$electionId, round=$round, officeCode=$officeCode, slot=$slot, <redacted>)"
 }
 
 sealed interface SavePickResult {

@@ -27,6 +27,9 @@ class TseHttpStatusException(val httpCode: Int) : IOException("TSE answered HTTP
 /** A response the app cannot use, such as a file over the size limit. Never retried. */
 class TseUnusableResponseException(message: String) : IOException(message)
 
+/** The response is not in the format the app reads (the TSE changed a layout). Never retried. */
+open class TseUnexpectedFormatException(message: String) : IOException(message)
+
 /** A request to a host outside [TseEndpoints.ALLOWED_HOSTS]; it never reaches the network. */
 class DisallowedHostException(host: String) : IOException("Host not allowed: $host")
 

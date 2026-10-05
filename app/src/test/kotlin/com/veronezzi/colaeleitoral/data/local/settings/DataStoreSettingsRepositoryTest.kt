@@ -1,6 +1,11 @@
 package com.veronezzi.colaeleitoral.data.local.settings
 
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.emptyPreferences
+import com.veronezzi.colaeleitoral.domain.model.AppError
+import com.veronezzi.colaeleitoral.domain.model.AppResult
 import com.veronezzi.colaeleitoral.domain.model.ElectoralUnit
 import com.veronezzi.colaeleitoral.domain.model.UserSettings
 import com.veronezzi.colaeleitoral.domain.model.VoterLocation
@@ -8,7 +13,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -17,6 +24,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.io.IOException
 
 class DataStoreSettingsRepositoryTest {
     @get:Rule
@@ -79,6 +87,22 @@ class DataStoreSettingsRepositoryTest {
 
         repository.clear()
 
+        assertEquals(UserSettings(), repository.settings.first())
+    }
+
+    @Test
+    fun aFailedWriteIsAStorageErrorInsteadOfACrash() = runTest {
+        val fullDisk = object : DataStore<Preferences> {
+            override val data: Flow<Preferences> = flowOf(emptyPreferences())
+
+            override suspend fun updateData(transform: suspend (t: Preferences) -> Preferences): Preferences =
+                throw IOException("No space left on device")
+        }
+        val repository = DataStoreSettingsRepository(fullDisk)
+
+        assertEquals(AppResult.Failure(AppError.Storage), repository.setLocation(VoterLocation("SP")))
+        assertEquals(AppResult.Failure(AppError.Storage), repository.setReminderEnabled(true))
+        assertEquals(AppResult.Failure(AppError.Storage), repository.clear())
         assertEquals(UserSettings(), repository.settings.first())
     }
 }

@@ -1,7 +1,6 @@
 package com.veronezzi.colaeleitoral.data.mapper
 
 import com.veronezzi.colaeleitoral.core.network.TseJson
-import com.veronezzi.colaeleitoral.data.local.db.CandidateDetailEntity
 import com.veronezzi.colaeleitoral.data.remote.dto.CandidatoDto
 import com.veronezzi.colaeleitoral.data.remote.dto.CandidatosResponseDto
 import com.veronezzi.colaeleitoral.data.remote.dto.CargoDto
@@ -200,18 +199,8 @@ class TseDtoMappersTest {
     }
 
     @Test
-    fun detailEntityRoundTripsThroughRoom() {
-        val dto = TseJson.decodeFromString(CandidatoDto.serializer(), Fixtures.text("tse/candidato-buscar-com-vice.json"))
-        val detail = requireNotNull(dto.toCandidateDetailOrNull(TestElections.MUNICIPAL_2024, "81809", null))
-
-        val entity: CandidateDetailEntity = detail.toEntity()
-
-        assertEquals(detail, entity.toDomain(detail.runningMateEntities()))
-    }
-
-    @Test
     fun errorCodesRoundTrip() {
-        val errors = listOf(AppError.Network, AppError.Blocked(403), AppError.Blocked(null), AppError.NotFound, AppError.Server(503), AppError.Parsing)
+        val errors = listOf(AppError.Network, AppError.Blocked(403), AppError.Blocked(null), AppError.NotFound, AppError.Server(503), AppError.Parsing, AppError.Storage)
 
         assertEquals(errors, errors.map { AppErrorCodec.decode(AppErrorCodec.encode(it)) })
         assertEquals(AppError.Unknown(null), AppErrorCodec.decode(AppErrorCodec.encode(AppError.Unknown(IllegalStateException("x")))))

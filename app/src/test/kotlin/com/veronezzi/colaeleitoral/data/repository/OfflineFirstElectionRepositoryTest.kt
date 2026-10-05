@@ -58,7 +58,9 @@ class OfflineFirstElectionRepositoryTest {
         val primary = DivulgaCandContasSource(TestNetwork.api(server, clock), TseCallExecutor(random = Random(0)), Dispatchers.Default)
         val openData = TestNetwork.openDataStore(server, clock, temporaryFolder.newFolder())
         val selector = CandidateSourceSelector(primary, TseOpenDataSource(openData, Dispatchers.IO), clock)
-        repository = OfflineFirstElectionRepository(db, primary, selector, openData, clock, Dispatchers.IO)
+        repository = OfflineFirstElectionRepository(
+            db, primary, selector, openData, CandidateDetailMemoryCache(), CachePolicy(clock), Dispatchers.IO, Dispatchers.Default,
+        )
     }
 
     @After

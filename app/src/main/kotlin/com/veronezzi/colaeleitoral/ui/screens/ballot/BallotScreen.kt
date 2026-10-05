@@ -46,6 +46,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.veronezzi.colaeleitoral.R
 import com.veronezzi.colaeleitoral.domain.model.BallotPick
@@ -60,13 +61,14 @@ import com.veronezzi.colaeleitoral.ui.components.AppTopBar
 import com.veronezzi.colaeleitoral.ui.components.DigitBoxSize
 import com.veronezzi.colaeleitoral.ui.components.DigitBoxes
 import com.veronezzi.colaeleitoral.ui.components.ListSkeleton
+import com.veronezzi.colaeleitoral.ui.components.PicksUnavailableBanner
 import com.veronezzi.colaeleitoral.ui.components.ScreenPreviews
 import com.veronezzi.colaeleitoral.ui.components.SectionHeader
 import com.veronezzi.colaeleitoral.ui.navigation.BallotRoute
 import com.veronezzi.colaeleitoral.ui.preview.PreviewData
 import com.veronezzi.colaeleitoral.ui.theme.ColaEleitoralTheme
 
-/** Navigation out of "Meu santinho". */
+/** Navigation out of "Minha cola". */
 data class BallotActions(
     val onChoose: (slot: BallotSlot, electionId: Long, year: Int, round: Round) -> Unit,
     val onOpenPick: (pick: BallotPick) -> Unit,
@@ -80,6 +82,10 @@ fun BallotRouteScreen(
     viewModel: BallotViewModel = hiltViewModel<BallotViewModel, BallotViewModel.Factory> { it.create(route) },
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    LifecycleResumeEffect(viewModel) {
+        viewModel.onScreenResumed()
+        onPauseOrDispose { }
+    }
     BallotScreen(
         state = state,
         actions = actions,
@@ -90,6 +96,7 @@ fun BallotRouteScreen(
         onClearConfirmed = viewModel::onClearConfirmed,
         onClearDismissed = viewModel::onClearDismissed,
         onMessageShown = viewModel::onMessageShown,
+        onRetryRead = viewModel::onRetryRead,
     )
 }
 
@@ -105,12 +112,19 @@ fun BallotScreen(
     onClearDismissed: () -> Unit,
     onMessageShown: () -> Unit,
     modifier: Modifier = Modifier,
+    onRetryRead: () -> Unit = {},
 ) {
     // Picks are sensitive (political opinion): no screenshots, no recents thumbnail.
     SecureScreen()
     val snackbarHostState = remember { SnackbarHostState() }
     state.message?.let { message ->
-        val text = stringResource(if (message is BallotMessage.Removed) R.string.ballot_removed else R.string.ballot_cleared)
+        val text = stringResource(
+            when (message) {
+                is BallotMessage.Removed -> R.string.ballot_removed
+                BallotMessage.Cleared -> R.string.ballot_cleared
+                BallotMessage.ChangeFailed -> R.string.ballot_change_failed
+            },
+        )
         val undo = stringResource(R.string.action_undo)
         LaunchedEffect(message) {
             val result = snackbarHostState.showSnackbar(
@@ -140,6 +154,9 @@ fun BallotScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
+            if (state.picksUnavailable) {
+                item(key = "unavailable") { PicksUnavailableBanner(onRetry = onRetryRead) }
+            }
             item(key = "header") { BallotHeader(state = state, onRoundSelected = onRoundSelected) }
             items(state.entries, key = { it.slot.key }) { entry ->
                 BallotEntryCard(
@@ -234,7 +251,8 @@ private fun BallotHeader(state: BallotUiState, onRoundSelected: (Round) -> Unit)
 
 /**
  * One vote: label, one box per digit and the pick. TalkBack reads the block as a single node,
- * "Senador, primeira vaga: 1 2 3, FULANO, PARTIDO" (ARCHITECTURE.md 4.6); actions stay separate.
+ * "Senador, primeira vaga: 1 2 3, FULANO, PARTIDO" (ARCHITECTURE.md 4.6); actions stay separate
+ * and name their vote ("Remover, Senador, primeira vaga"), since they repeat on every card.
  */
 @Composable
 private fun BallotEntryCard(
@@ -283,13 +301,18 @@ private fun BallotEntryCard(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (canEdit) {
-                    TextButton(onClick = onChoose) {
+                    val chooseLabel = stringResource(if (pick == null) R.string.ballot_choose_for else R.string.ballot_change_for, spokenLabel)
+                    TextButton(onClick = onChoose, modifier = Modifier.semantics { contentDescription = chooseLabel }) {
                         Text(stringResource(if (pick == null) R.string.home_choose else R.string.home_change_pick))
                     }
                 }
                 if (pick != null) {
-                    TextButton(onClick = { onOpenPick(pick) }) { Text(stringResource(R.string.ballot_see_detail)) }
-                    TextButton(onClick = { onRemove(pick) }) {
+                    val detailLabel = stringResource(R.string.ballot_see_detail_for, spokenLabel)
+                    val removeLabel = stringResource(R.string.ballot_remove_for, spokenLabel)
+                    TextButton(onClick = { onOpenPick(pick) }, modifier = Modifier.semantics { contentDescription = detailLabel }) {
+                        Text(stringResource(R.string.ballot_see_detail))
+                    }
+                    TextButton(onClick = { onRemove(pick) }, modifier = Modifier.semantics { contentDescription = removeLabel }) {
                         Icon(Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
                         Spacer(Modifier.width(ButtonDefaults.IconSpacing))
                         Text(stringResource(R.string.ballot_remove))
@@ -320,7 +343,10 @@ private fun OutsidePickRow(pick: BallotPick, onRemove: (BallotPick) -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        TextButton(onClick = { onRemove(pick) }) { Text(stringResource(R.string.ballot_remove)) }
+        val removeLabel = stringResource(R.string.ballot_remove_outside_for, pick.officeName, pick.ballotName)
+        TextButton(onClick = { onRemove(pick) }, modifier = Modifier.semantics { contentDescription = removeLabel }) {
+            Text(stringResource(R.string.ballot_remove))
+        }
     }
 }
 

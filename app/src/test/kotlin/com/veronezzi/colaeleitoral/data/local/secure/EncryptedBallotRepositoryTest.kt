@@ -1,10 +1,12 @@
 package com.veronezzi.colaeleitoral.data.local.secure
 
+import app.cash.turbine.test
 import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import com.veronezzi.colaeleitoral.data.testing.FakeBallotCipher
 import com.veronezzi.colaeleitoral.domain.model.AppError
 import com.veronezzi.colaeleitoral.domain.model.BallotPick
+import com.veronezzi.colaeleitoral.domain.model.DataSource
 import com.veronezzi.colaeleitoral.domain.model.Round
 import com.veronezzi.colaeleitoral.domain.model.SavePickResult
 import kotlinx.coroutines.CoroutineScope
@@ -16,6 +18,7 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -24,6 +27,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.security.ProviderException
 import java.time.Instant
 
 /** Picks encrypted with a software AES-GCM key standing in for the AndroidKeyStore. */
@@ -185,7 +189,104 @@ class EncryptedBallotRepositoryTest {
 
         val result = repository.savePick(pick(officeCode = 6, urnaOrder = 1, candidateId = 5070))
 
-        assertEquals(SavePickResult.Failed(AppError.Unknown(null)), result)
+        assertEquals(SavePickResult.Failed(AppError.Storage), result)
+    }
+
+    @Test
+    fun providerExceptionOnReadLeavesTheFileIntactAndTheBallotRecovers() = runTest {
+        val saved = pick(officeCode = 6, urnaOrder = 1, candidateId = 5070)
+        repository.savePick(saved)
+        scope.coroutineContext.job.cancelAndJoin()
+        val before = file.readBytes()
+        cipher.decryptionFailure = ProviderException("Keystore not ready")
+        repository = open()
+
+        assertTrue(repository.observeUnavailable().first())
+        assertTrue(repository.observeBallot(ELECTION, Round.FIRST).first().isEmpty())
+        assertFalse("nothing was lost", repository.observePicksLost().first())
+        assertEquals(
+            "no write over a file that could not be read",
+            SavePickResult.Failed(AppError.Storage),
+            repository.savePick(pick(officeCode = 1, urnaOrder = 5, candidateId = 13)),
+        )
+        assertArrayEquals(before, file.readBytes())
+        assertTrue(cipher.hasKey)
+        assertEquals(0, cipher.deleteKeyCalls)
+
+        cipher.decryptionFailure = null
+        repository.retryRead()
+
+        assertEquals(listOf(saved), repository.observeBallot(ELECTION, Round.FIRST).first())
+        assertFalse(repository.observeUnavailable().first())
+    }
+
+    @Test
+    fun aScreenObservingTheBallotSeesItComeBackAfterRetry() = runTest {
+        val saved = pick(officeCode = 6, urnaOrder = 1, candidateId = 5070)
+        repository.savePick(saved)
+        scope.coroutineContext.job.cancelAndJoin()
+        cipher.decryptionFailure = ProviderException("Keystore not ready")
+        repository = open()
+
+        repository.observeUnavailable().test {
+            assertTrue(awaitItem())
+            cipher.decryptionFailure = null
+            repository.retryRead()
+            assertFalse(awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(listOf(saved), repository.observeBallot(ELECTION, Round.FIRST).first())
+    }
+
+    @Test
+    fun transientFailureOnWriteKeepsTheKeyAndTheSavedPicks() = runTest {
+        val saved = pick(officeCode = 6, urnaOrder = 1, candidateId = 5070)
+        repository.savePick(saved)
+        cipher.encryptionFailure = ProviderException("Keystore busy")
+
+        assertEquals(SavePickResult.Failed(AppError.Storage), repository.savePick(pick(officeCode = 1, urnaOrder = 5, candidateId = 13)))
+        assertTrue(cipher.hasKey)
+        assertEquals(0, cipher.deleteKeyCalls)
+
+        cipher.encryptionFailure = null
+        restart()
+        assertEquals(listOf(saved), repository.observeBallot(ELECTION, Round.FIRST).first())
+        assertFalse(repository.observePicksLost().first())
+    }
+
+    @Test
+    fun sourceIsSavedWithThePick() = runTest {
+        val fromOpenData = pick(officeCode = 6, urnaOrder = 1, candidateId = 5070).copy(source = DataSource.TSE_OPEN_DATA)
+        repository.savePick(fromOpenData)
+
+        restart()
+
+        assertEquals(DataSource.TSE_OPEN_DATA, repository.observeBallot(ELECTION, Round.FIRST).first().single().source)
+    }
+
+    @Test
+    fun picksSavedBeforeTheSourceFieldReadAsThePrimarySource() = runTest {
+        scope.coroutineContext.job.cancelAndJoin()
+        val oldFormat = """{"picks":[{"electionId":$ELECTION,"electionYear":2026,"round":1,"officeCode":6,""" +
+            """"officeName":"Deputado Federal","urnaOrder":1,"digitCount":4,"slot":1,"ueCode":"SP","candidateId":5070,""" +
+            """"candidateNumber":"5070","ballotName":"NOME","partyAcronym":"P","statusAtSave":"Deferido",""" +
+            """"savedAtEpochMillis":0}]}"""
+        val sealed = cipher.encrypt(oldFormat.encodeToByteArray(), EncryptedBallotSerializer.ASSOCIATED_DATA)
+        file.writeBytes(byteArrayOf(EncryptedBallotSerializer.FORMAT_VERSION) + sealed)
+        repository = open()
+
+        val restored = repository.observeBallot(ELECTION, Round.FIRST).first().single()
+
+        assertEquals(DataSource.DIVULGA_CAND_CONTAS, restored.source)
+        assertEquals("5070", restored.candidateNumber)
+    }
+
+    @Test
+    fun pickNeverPrintsWhoWasPicked() {
+        val text = pick(officeCode = 6, urnaOrder = 1, candidateId = 5070, ballotName = "SECRETO").toString()
+
+        assertFalse(text.contains("SECRETO"))
+        assertFalse(text.contains("5070"))
     }
 
     @Test

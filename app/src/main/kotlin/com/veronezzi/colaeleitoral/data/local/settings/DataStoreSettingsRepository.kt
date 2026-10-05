@@ -8,6 +8,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.veronezzi.colaeleitoral.data.local.storageResult
+import com.veronezzi.colaeleitoral.domain.model.AppResult
 import com.veronezzi.colaeleitoral.domain.model.ElectoralUnit
 import com.veronezzi.colaeleitoral.domain.model.UserSettings
 import com.veronezzi.colaeleitoral.domain.model.VoterLocation
@@ -22,7 +24,8 @@ import javax.inject.Singleton
 
 /**
  * Preferences in a plain DataStore (no political data here; the file is excluded from backup by
- * the manifest rules). An unreadable file yields the defaults instead of crashing.
+ * the manifest rules). An unreadable file yields the defaults instead of crashing, and a write
+ * that fails (disk full, I/O error) returns `AppError.Storage` and keeps the previous values.
  */
 @Singleton
 class DataStoreSettingsRepository @Inject constructor(
@@ -33,7 +36,7 @@ class DataStoreSettingsRepository @Inject constructor(
         .map { it.toSettings() }
         .distinctUntilChanged()
 
-    override suspend fun setLocation(location: VoterLocation) = edit { prefs ->
+    override suspend fun setLocation(location: VoterLocation): AppResult<Unit> = edit { prefs ->
         prefs[UF] = location.uf
         val municipality = location.municipality
         if (municipality != null) {
@@ -45,20 +48,20 @@ class DataStoreSettingsRepository @Inject constructor(
         }
     }
 
-    override suspend fun completeOnboarding(version: Int) = edit { prefs ->
+    override suspend fun completeOnboarding(version: Int): AppResult<Unit> = edit { prefs ->
         prefs[ONBOARDING_COMPLETED] = true
         prefs[ACCEPTED_DISCLAIMER_VERSION] = version
     }
 
-    override suspend fun setReminderEnabled(enabled: Boolean) = edit { it[REMINDER_ENABLED] = enabled }
+    override suspend fun setReminderEnabled(enabled: Boolean): AppResult<Unit> = edit { it[REMINDER_ENABLED] = enabled }
 
-    override suspend fun setAppLockEnabled(enabled: Boolean) = edit { it[APP_LOCK_ENABLED] = enabled }
+    override suspend fun setAppLockEnabled(enabled: Boolean): AppResult<Unit> = edit { it[APP_LOCK_ENABLED] = enabled }
 
-    override suspend fun setSecureScreens(enabled: Boolean) = edit { it[SECURE_SCREENS] = enabled }
+    override suspend fun setSecureScreens(enabled: Boolean): AppResult<Unit> = edit { it[SECURE_SCREENS] = enabled }
 
-    override suspend fun clear() = edit { it.clear() }
+    override suspend fun clear(): AppResult<Unit> = edit { it.clear() }
 
-    private suspend fun edit(change: (MutablePreferences) -> Unit) {
+    private suspend fun edit(change: (MutablePreferences) -> Unit): AppResult<Unit> = storageResult {
         dataStore.edit { prefs -> change(prefs) }
     }
 

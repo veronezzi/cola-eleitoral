@@ -32,19 +32,27 @@ fun publishingProperty(name: String): String =
         ?: throw GradleException("Propriedade de publicacao ausente: $name (ver gradle.properties).")
 
 // Guarda de release: nenhuma tarefa da variante release (assembleRelease, bundleRelease, lintRelease...)
-// roda enquanto a URL da política de privacidade ou o e-mail de contato forem os marcadores
-// "example.com" de gradle.properties. A checagem é feita na execução, a partir de pre*ReleaseBuild,
+// roda enquanto a URL da política de privacidade, o e-mail de contato ou o nome do desenvolvedor
+// forem marcadores, ou enquanto docs/privacidade.md (embutida no app) não citar esses mesmos
+// valores. A checagem é feita na execução, a partir de pre*ReleaseBuild,
 // então debug, lint, testDebugUnitTest e o CI não são afetados. Ver docs/PUBLICACAO.md.
 val checkReleasePublishingProperties = tasks.register("checkReleasePublishingProperties") {
     group = "verification"
-    description = "Falha se colaEleitoral.privacyPolicyUrl ou colaEleitoral.contactEmail ainda forem marcadores."
+    description = "Falha se os dados de publicacao (colaEleitoral.*) forem marcadores ou nao baterem com a politica."
     val privacyPolicyUrl = providers.gradleProperty("colaEleitoral.privacyPolicyUrl").orElse("")
     val contactEmail = providers.gradleProperty("colaEleitoral.contactEmail").orElse("")
+    val developerName = providers.gradleProperty("colaEleitoral.developerName").orElse("")
+    // A politica embutida no app (embedPrivacyPolicy) tem de citar o mesmo responsavel e contato.
+    val policy = rootProject.layout.projectDirectory.file("docs/privacidade.md")
     inputs.property("privacyPolicyUrl", privacyPolicyUrl)
     inputs.property("contactEmail", contactEmail)
+    inputs.property("developerName", developerName)
+    inputs.file(policy)
     doLast {
         val url = privacyPolicyUrl.get().trim()
         val email = contactEmail.get().trim()
+        val name = developerName.get().trim()
+        val policyText = policy.asFile.readText()
         // Sem acentos de propósito, como as outras mensagens deste arquivo.
         val problems = buildList {
             when {
@@ -56,6 +64,15 @@ val checkReleasePublishingProperties = tasks.register("checkReleasePublishingPro
                 !Regex("""[^@\s]+@[^@\s]+\.[^@\s]+""").matches(email) ->
                     add("colaEleitoral.contactEmail nao parece um e-mail: $email")
             }
+            when {
+                name.isEmpty() -> add("colaEleitoral.developerName esta vazio")
+                Regex("""preencher|example|exemplo|[\[\]"\\]""", RegexOption.IGNORE_CASE).containsMatchIn(name) ->
+                    add("colaEleitoral.developerName ainda e um marcador ou tem caracteres invalidos: $name")
+            }
+            if ("[PREENCHER" in policyText) add("docs/privacidade.md ainda tem campos [PREENCHER]")
+            listOf(name, email, url).filter { it.isNotEmpty() && it !in policyText }.forEach {
+                add("docs/privacidade.md (politica embutida no app) nao cita: $it")
+            }
         }
         if (problems.isNotEmpty()) {
             throw GradleException(
@@ -64,7 +81,7 @@ val checkReleasePublishingProperties = tasks.register("checkReleasePublishingPro
                     prefix = "Build de release bloqueado: dados de publicacao invalidos.\n",
                     postfix = "\nDefina os valores reais em gradle.properties ou na linha de comando, por exemplo:\n" +
                         "  ./gradlew bundleRelease -PcolaEleitoral.privacyPolicyUrl=https://... " +
-                        "-PcolaEleitoral.contactEmail=...\n" +
+                        "-PcolaEleitoral.contactEmail=... -PcolaEleitoral.developerName=...\n" +
                         "Veja docs/PUBLICACAO.md.",
                 ) { "  - $it" },
             )
@@ -73,6 +90,41 @@ val checkReleasePublishingProperties = tasks.register("checkReleasePublishingPro
 }
 tasks.named { it.startsWith("pre") && it.endsWith("ReleaseBuild") }.configureEach {
     dependsOn(checkReleasePublishingProperties)
+}
+
+/**
+ * Politica de privacidade dentro do app: docs/privacidade.md e a fonte unica (a pagina publica e
+ * gerada do mesmo arquivo). Esta tarefa copia o texto, sem alterar, para res/raw/privacy_policy.md
+ * num diretorio gerado; a tela PrivacyPolicyScreen o le e o renderiza.
+ */
+abstract class EmbedPrivacyPolicy : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val policy: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val resDirectory: DirectoryProperty
+
+    @TaskAction
+    fun embed() {
+        val raw = resDirectory.get().dir("raw").asFile
+        raw.deleteRecursively()
+        raw.mkdirs()
+        policy.get().asFile.copyTo(raw.resolve("privacy_policy.md"))
+    }
+}
+
+val embedPrivacyPolicy = tasks.register<EmbedPrivacyPolicy>("embedPrivacyPolicy") {
+    group = "build"
+    description = "Copia docs/privacidade.md para os recursos do app (res/raw/privacy_policy.md)."
+    policy = rootProject.layout.projectDirectory.file("docs/privacidade.md")
+    resDirectory = layout.buildDirectory.dir("generated/privacyPolicy/res")
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.res?.addGeneratedSourceDirectory(embedPrivacyPolicy, EmbedPrivacyPolicy::resDirectory)
+    }
 }
 
 android {
@@ -96,6 +148,8 @@ android {
         // padrão são marcadores e não podem ir para um build de release.
         buildConfigField("String", "PRIVACY_POLICY_URL", "\"${publishingProperty("colaEleitoral.privacyPolicyUrl")}\"")
         buildConfigField("String", "CONTACT_EMAIL", "\"${publishingProperty("colaEleitoral.contactEmail")}\"")
+        // "Desenvolvido por ..." em Sobre e na política do app (política de deturpação do Google Play).
+        buildConfigField("String", "DEVELOPER_NAME", "\"${publishingProperty("colaEleitoral.developerName")}\"")
     }
 
     signingConfigs {
@@ -157,6 +211,17 @@ tasks.withType<Test>().configureEach {
     // O sandbox do SDK 36 (ApplicationSharedMemory) mexe nos internos de FileDescriptor via
     // jdk.internal.access, que o java.base não exporta por padrão.
     jvmArgs("--add-opens=java.base/jdk.internal.access=ALL-UNNAMED")
+    // Capturas de tela da loja (ui/screenshots/StoreScreenshots, dados fictícios): fora da rodada
+    // normal. Para gerar de novo em fastlane/metadata/android/pt-BR/images/phoneScreenshots:
+    //   ./gradlew :app:testDebugUnitTest --tests '*.StoreScreenshots' -PcolaEleitoral.storeScreenshots=true
+    if (providers.gradleProperty("colaEleitoral.storeScreenshots").orNull == "true") {
+        val screenshotsDir = rootProject.layout.projectDirectory.dir("fastlane/metadata/android/pt-BR/images/phoneScreenshots")
+        systemProperty("colaEleitoral.screenshotsDir", screenshotsDir.asFile.absolutePath)
+        outputs.upToDateWhen { false }
+        outputs.cacheIf { false }
+    } else {
+        filter.excludeTestsMatching("*.StoreScreenshots")
+    }
 }
 
 room {

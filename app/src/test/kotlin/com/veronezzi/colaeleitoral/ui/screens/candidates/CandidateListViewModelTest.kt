@@ -72,7 +72,9 @@ class CandidateListViewModelTest {
 
             vm.onQueryChange("bruno")
             advanceTimeBy(CandidateListViewModel.SEARCH_DEBOUNCE_MILLIS - 50)
-            assertEquals("bruno", expectMostRecentItem().query)
+            // The field shows the text at once; the list waits for the debounce.
+            assertEquals("bruno", vm.query)
+            expectNoEvents()
             assertEquals(4, vm.uiState.value.items.size)
 
             advanceTimeBy(100)

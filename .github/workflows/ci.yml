@@ -34,8 +34,17 @@ jobs:
       - name: Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Lint, testes unitários e APK debug
-        run: ./gradlew lint testDebugUnitTest assembleDebug
+      # O lint roda numa invocação própria: junto com as outras tarefas, a análise K2 do lint
+      # (workers no mesmo processo) falhou com "Unexpected failure during lint analysis".
+      - name: Lint
+        run: ./gradlew lint
+
+      - name: Testes unitários, APK debug e manifesto mesclado de release
+        run: ./gradlew testDebugUnitTest assembleDebug :app:processReleaseMainManifest
+
+      # Nenhuma permissão fora da lista (FOREGROUND_SERVICE, AD_ID...) pode entrar por biblioteca.
+      - name: Permissões do manifesto mesclado de release
+        run: scripts/check-merged-manifest.sh
 
       - name: Publicar relatórios do lint e dos testes
         if: failure()

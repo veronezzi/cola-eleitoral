@@ -28,7 +28,10 @@ interface CandidateRepository {
 
     fun observeFilterOptions(electionId: Long, ueCode: String, officeCode: Int): Flow<FilterOptions>
 
-    /** Null value until the detail was downloaded once. */
+    /**
+     * Null value until the detail was downloaded in this process: details and running mates are
+     * kept only in memory, never on disk (privacy, S2), so after a restart they download again.
+     */
     fun observeCandidateDetail(electionId: Long, candidateId: Long): Flow<CachedData<CandidateDetail?>>
 
     suspend fun refreshCandidateDetail(

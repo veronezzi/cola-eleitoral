@@ -71,6 +71,7 @@ import com.veronezzi.colaeleitoral.ui.components.DigitBoxes
 import com.veronezzi.colaeleitoral.ui.components.ErrorState
 import com.veronezzi.colaeleitoral.ui.components.ListSkeleton
 import com.veronezzi.colaeleitoral.ui.components.MessageState
+import com.veronezzi.colaeleitoral.ui.components.PicksUnavailableBanner
 import com.veronezzi.colaeleitoral.ui.components.ScreenPreviews
 import com.veronezzi.colaeleitoral.ui.components.SectionHeader
 import com.veronezzi.colaeleitoral.ui.components.rememberReminderOptIn
@@ -102,6 +103,7 @@ fun HomeRoute(
         onRefresh = viewModel::onRefresh,
         onElectionSelected = viewModel::onElectionSelected,
         onEnableReminder = reminderOptIn::start,
+        onRetryRead = viewModel::onRetryRead,
     )
 }
 
@@ -114,6 +116,7 @@ fun HomeScreen(
     onElectionSelected: (Long) -> Unit,
     onEnableReminder: () -> Unit,
     modifier: Modifier = Modifier,
+    onRetryRead: () -> Unit = {},
 ) {
     SecureScreen(active = state.showsPicks)
     var showElectionPicker by rememberSaveable { mutableStateOf(false) }
@@ -150,6 +153,7 @@ fun HomeScreen(
                         actions = actions,
                         onPickElection = { showElectionPicker = true },
                         onEnableReminder = onEnableReminder,
+                        onRetryRead = onRetryRead,
                     )
                 }
             }
@@ -172,6 +176,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.homeContent(
     actions: HomeActions,
     onPickElection: () -> Unit,
     onEnableReminder: () -> Unit,
+    onRetryRead: () -> Unit,
 ) {
     val election = state.election ?: return
     item(key = "election") {
@@ -184,6 +189,9 @@ private fun androidx.compose.foundation.lazy.LazyListScope.homeContent(
     }
     item(key = "ballot-header") {
         SectionHeader(text = stringResource(R.string.home_ballot_title), modifier = Modifier.padding(top = 8.dp))
+    }
+    if (state.picksUnavailable) {
+        item(key = "picks-unavailable") { PicksUnavailableBanner(onRetry = onRetryRead) }
     }
     when (val ballot = state.ballot) {
         BallotSection.Loading -> item(key = "ballot-loading") {

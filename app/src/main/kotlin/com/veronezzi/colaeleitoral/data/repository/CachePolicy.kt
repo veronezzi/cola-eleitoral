@@ -17,6 +17,9 @@ import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /** Cached data kinds and their TTLs (ARCHITECTURE.md 2.8): normal and election week. */
 enum class CacheKind(val normalTtl: Duration, val electionWeekTtl: Duration) {
@@ -27,25 +30,52 @@ enum class CacheKind(val normalTtl: Duration, val electionWeekTtl: Duration) {
     DETAIL(Duration.ofHours(6), Duration.ofHours(1)),
 }
 
-/** Keys of `fetch_state`. */
+/** Keys of `fetch_state`, plus the in-memory key of a candidate detail (never stored). */
 object FetchKeys {
     const val ELECTIONS = "elections"
+    private const val MUNICIPALITIES_PREFIX = "municipalities:"
 
-    fun municipalities(uf: String) = "municipalities:$uf"
+    fun municipalities(uf: String) = "$MUNICIPALITIES_PREFIX$uf"
 
-    fun offices(electionId: Long, ueCode: String) = "offices:$electionId:$ueCode"
+    fun offices(electionId: Long, ueCode: String) = "${officesPrefix(electionId)}$ueCode"
 
-    fun candidates(electionId: Long, ueCode: String, officeCode: Int) = "candidates:$electionId:$ueCode:$officeCode"
+    fun candidates(electionId: Long, ueCode: String, officeCode: Int) = "${candidatesPrefix(electionId)}$ueCode:$officeCode"
 
+    /** Key of the in-memory detail cache: details are never written to `fetch_state` (S2). */
     fun detail(electionId: Long, candidateId: Long) = "detail:$electionId:$candidateId"
+
+    fun officesPrefix(electionId: Long) = "offices:$electionId:"
+
+    fun candidatesPrefix(electionId: Long) = "candidates:$electionId:"
+
+    /** The election of an `offices:` or `candidates:` key, or null for any other key. */
+    fun electionIdOf(key: String): Long? {
+        val parts = key.split(':')
+        if (parts.size < 2 || (parts[0] != "offices" && parts[0] != "candidates")) return null
+        return parts[1].toLongOrNull()
+    }
+
+    /** The UF of a `municipalities:` key, or null for any other key. */
+    fun ufOf(key: String): String? = key.takeIf { it.startsWith(MUNICIPALITIES_PREFIX) }?.removePrefix(MUNICIPALITIES_PREFIX)
 }
 
 /**
- * Freshness rules with an injected clock. "Election week" is D-7 to D+1 of each round, in
- * Brasília. A key is refreshed at most once per [MIN_REFRESH_INTERVAL], forced or not, so neither
- * a pull-to-refresh nor a failing screen can hammer the TSE.
+ * Freshness rules with an injected clock, shared by every repository (one instance). "Election
+ * week" is D-7 to D+1 of each round, in Brasília.
+ *
+ * Refresh limit: a key is downloaded at most once per [MIN_REFRESH_INTERVAL], forced or not,
+ * after a success or a failure that reached the TSE (refusal, 5xx, not found, unexpected
+ * format), so neither a pull-to-refresh nor a failing screen can hammer it. A failure that never
+ * reached the TSE (no connection, local storage, unknown) may be retried at once, and a change of
+ * network ([forgiveFailures], called by the `NetworkMonitor`) lifts the limit of every failed key:
+ * a refusal of one network says nothing about the next one.
  */
-class CachePolicy(private val clock: Clock) {
+@Singleton
+class CachePolicy @Inject constructor(private val clock: Clock) {
+    @Volatile
+    private var failuresForgivenAt: Instant = Instant.MIN
+    private val generation = AtomicLong()
+
     fun now(): Instant = clock.instant()
 
     // atZone instead of LocalDate.ofInstant: the latter needs API 34 (minSdk is 26).
@@ -71,10 +101,30 @@ class CachePolicy(private val clock: Clock) {
     /** The result to return without any download, or null when the key must be fetched now. */
     fun resultWithoutFetch(state: FetchStateEntity?, ttl: Duration, force: Boolean): AppResult<Unit>? {
         val lastAttempt = state?.lastAttemptAt?.let(Instant::ofEpochMilli)
-        if (lastAttempt != null && Duration.between(lastAttempt, now()) < MIN_REFRESH_INTERVAL) {
-            return state.lastError?.let { AppResult.Failure(AppErrorCodec.decode(it)) } ?: AppResult.Success(Unit)
-        }
+        val lastError = state?.lastError?.let(AppErrorCodec::decode)
+        val limited = lastAttempt != null &&
+            Duration.between(lastAttempt, now()) < MIN_REFRESH_INTERVAL &&
+            (lastError == null || (lastError.reachedTheTse() && lastAttempt.isAfter(failuresForgivenAt)))
+        if (limited) return lastError?.let { AppResult.Failure(it) } ?: AppResult.Success(Unit)
         return if (!force && !isStale(state, ttl)) AppResult.Success(Unit) else null
+    }
+
+    /** The default network changed: failed keys may be downloaded again right away. */
+    fun forgiveFailures() {
+        failuresForgivenAt = now()
+    }
+
+    /**
+     * Token of the current cache contents. [onCacheCleared] changes it, so a refresh that started
+     * before "Limpar dados baixados" or "Apagar meus dados" checks [isCurrent] inside its write
+     * transaction and drops its result instead of writing it back.
+     */
+    fun cacheGeneration(): Long = generation.get()
+
+    fun isCurrent(cacheGeneration: Long): Boolean = generation.get() == cacheGeneration
+
+    fun onCacheCleared() {
+        generation.incrementAndGet()
     }
 
     fun success(key: String, source: DataSource): FetchStateEntity {
@@ -102,6 +152,12 @@ class CachePolicy(private val clock: Clock) {
     companion object {
         val MIN_REFRESH_INTERVAL: Duration = Duration.ofMinutes(1)
         private const val ELECTION_WEEK_DAYS_BEFORE = 7L
+
+        /** Whether the request got an answer from the TSE (so repeating it at once changes nothing). */
+        private fun AppError.reachedTheTse(): Boolean = when (this) {
+            is AppError.Blocked, is AppError.Server, AppError.NotFound, AppError.Parsing -> true
+            AppError.Network, AppError.Storage, is AppError.Unknown -> false
+        }
     }
 }
 

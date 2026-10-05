@@ -45,7 +45,7 @@ data class CandidateDetailRoute(
     val slot: Int = 1,
 )
 
-/** "Meu santinho": the saved picks of one election round. */
+/** "Minha cola": the saved picks of one election round. */
 @Serializable
 data class BallotRoute(val electionId: Long, val round: Int)
 

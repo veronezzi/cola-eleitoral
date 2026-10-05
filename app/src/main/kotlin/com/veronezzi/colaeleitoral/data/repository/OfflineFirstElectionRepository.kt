@@ -1,10 +1,11 @@
 package com.veronezzi.colaeleitoral.data.repository
 
-import androidx.room.withTransaction
+import com.veronezzi.colaeleitoral.core.common.DefaultDispatcher
 import com.veronezzi.colaeleitoral.core.common.IoDispatcher
 import com.veronezzi.colaeleitoral.data.local.db.FetchStateEntity
 import com.veronezzi.colaeleitoral.data.local.db.OfficeEntity
 import com.veronezzi.colaeleitoral.data.local.db.PublicCacheDatabase
+import com.veronezzi.colaeleitoral.data.local.storageResult
 import com.veronezzi.colaeleitoral.data.mapper.AppErrorCodec
 import com.veronezzi.colaeleitoral.data.mapper.toDomain
 import com.veronezzi.colaeleitoral.data.mapper.toDomainOrNull
@@ -24,14 +25,14 @@ import com.veronezzi.colaeleitoral.domain.model.Office
 import com.veronezzi.colaeleitoral.domain.model.OfficeRules
 import com.veronezzi.colaeleitoral.domain.model.Round
 import com.veronezzi.colaeleitoral.domain.model.VoterLocation
-import com.veronezzi.colaeleitoral.domain.model.normalizeForSearch
 import com.veronezzi.colaeleitoral.domain.repository.ElectionRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
-import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import javax.inject.Inject
@@ -39,8 +40,9 @@ import javax.inject.Singleton
 
 /**
  * Elections, municipalities and ballot offices, offline-first (ARCHITECTURE.md 2.8): reads emit
- * the Room cache at once; `refresh*` downloads only when the TTL expired (or [force]) and
- * replaces the key's rows in one transaction. A failed refresh never deletes cached rows.
+ * the Room cache at once (mapped and sorted on [defaultDispatcher]); `refresh*` downloads only
+ * when the TTL expired (or [force]) and replaces the key's rows in one transaction. A failed
+ * refresh never deletes cached rows, and a storage failure (disk full) is `AppError.Storage`.
  */
 @Singleton
 class OfflineFirstElectionRepository @Inject constructor(
@@ -48,10 +50,11 @@ class OfflineFirstElectionRepository @Inject constructor(
     private val api: DivulgaCandContasSource,
     private val selector: CandidateSourceSelector,
     private val openDataFiles: OpenDataFileStore,
-    clock: Clock,
+    private val details: CandidateDetailMemoryCache,
+    private val policy: CachePolicy,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
+    @param:DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
 ) : ElectionRepository {
-    private val policy = CachePolicy(clock)
     private val locks = KeyedMutex()
     private val electionDao = db.electionDao()
     private val municipalityDao = db.municipalityDao()
@@ -62,26 +65,30 @@ class OfflineFirstElectionRepository @Inject constructor(
         combine(electionDao.observeAll(), fetchStateDao.observe(FetchKeys.ELECTIONS)) { rows, state ->
             val elections = rows.mapNotNull { it.toDomainOrNull() }.sortedWith(NEWEST_FIRST)
             policy.cachedData(elections, state, policy.ttl(CacheKind.ELECTIONS, policy.isElectionWeek(elections)))
-        }
+        }.distinctUntilChanged().flowOn(defaultDispatcher)
 
     override suspend fun refreshElections(force: Boolean): AppResult<Unit> = locks.withLock(FetchKeys.ELECTIONS) {
         val key = FetchKeys.ELECTIONS
-        val state = fetchStateDao.get(key)
-        val cached = electionDao.getAll().mapNotNull { it.toDomainOrNull() }
+        val (state, cached) = when (
+            val read = storageResult { fetchStateDao.get(key) to electionDao.getAll().mapNotNull { it.toDomainOrNull() } }
+        ) {
+            is AppResult.Success -> read.value
+            is AppResult.Failure -> return@withLock read
+        }
         val ttl = policy.ttl(CacheKind.ELECTIONS, policy.isElectionWeek(cached))
         policy.resultWithoutFetch(state, ttl, force)?.let { return@withLock it }
+        val generation = policy.cacheGeneration()
         when (val result = api.fetchElections()) {
-            is AppResult.Success -> {
-                db.withTransaction {
-                    electionDao.deleteAll()
-                    electionDao.insertAll(result.value.map { it.toEntity() })
-                    fetchStateDao.upsert(policy.success(key, DataSource.DIVULGA_CAND_CONTAS))
-                }
-                AppResult.Success(Unit)
+            is AppResult.Success -> db.writeCache(policy, generation) {
+                electionDao.deleteAll()
+                electionDao.insertAll(result.value.map { it.toEntity() })
+                fetchStateDao.upsert(policy.success(key, DataSource.DIVULGA_CAND_CONTAS))
+            }.also { written ->
+                if (written is AppResult.Failure) recordFailure(key, state, written.error, generation)
             }
             is AppResult.Failure -> {
                 val seed = if (cached.isEmpty()) ElectionSeed.electionsFor(policy.today()) else emptyList()
-                db.withTransaction {
+                db.writeCache(policy, generation) {
                     if (seed.isNotEmpty()) {
                         electionDao.insertAll(seed.map { it.toEntity() })
                         fetchStateDao.upsert(seedState(key, result.error))
@@ -96,17 +103,20 @@ class OfflineFirstElectionRepository @Inject constructor(
 
     override fun observeMunicipalities(uf: String): Flow<CachedData<List<ElectoralUnit>>> {
         if (uf == ElectoralUnit.ABROAD_CODE) return flowOf(CachedData(emptyList(), fetchedAt = null, isStale = false))
+        // Sorted by the DAO on the normalized name stored with each row (computed once on insert).
         return combine(municipalityDao.observeByUf(uf), fetchStateDao.observe(FetchKeys.municipalities(uf))) { rows, state ->
-            val units = rows.map { it.toDomain() }.sortedBy { normalizeForSearch(it.name) }
-            policy.cachedData(units, state, CacheKind.MUNICIPALITIES.normalTtl)
-        }
+            policy.cachedData(rows.map { it.toDomain() }, state, CacheKind.MUNICIPALITIES.normalTtl)
+        }.distinctUntilChanged().flowOn(defaultDispatcher)
     }
 
     override suspend fun refreshMunicipalities(uf: String, force: Boolean): AppResult<Unit> {
         if (uf == ElectoralUnit.ABROAD_CODE) return AppResult.Success(Unit)
         val key = FetchKeys.municipalities(uf)
         return locks.withLock(key) {
-            val state = fetchStateDao.get(key)
+            val state = when (val read = storageResult { fetchStateDao.get(key) }) {
+                is AppResult.Success -> read.value
+                is AppResult.Failure -> return@withLock read
+            }
             policy.resultWithoutFetch(state, CacheKind.MUNICIPALITIES.normalTtl, force)?.let { return@withLock it }
             // E2 needs the id of the latest municipal election, so the election list comes first.
             val municipalElection = latestMunicipalElection() ?: run {
@@ -114,17 +124,17 @@ class OfflineFirstElectionRepository @Inject constructor(
                 latestMunicipalElection()
                     ?: return@withLock (electionsResult as? AppResult.Failure) ?: AppResult.Failure(AppError.NotFound)
             }
+            val generation = policy.cacheGeneration()
             when (val result = api.fetchMunicipalities(uf, municipalElection.id)) {
-                is AppResult.Success -> {
-                    db.withTransaction {
-                        municipalityDao.deleteByUf(uf)
-                        municipalityDao.insertAll(result.value.map { it.toMunicipalityEntity(municipalElection.id) })
-                        fetchStateDao.upsert(policy.success(key, DataSource.DIVULGA_CAND_CONTAS))
-                    }
-                    AppResult.Success(Unit)
+                is AppResult.Success -> db.writeCache(policy, generation) {
+                    municipalityDao.deleteByUf(uf)
+                    municipalityDao.insertAll(result.value.map { it.toMunicipalityEntity(municipalElection.id) })
+                    fetchStateDao.upsert(policy.success(key, DataSource.DIVULGA_CAND_CONTAS))
+                }.also { written ->
+                    if (written is AppResult.Failure) recordFailure(key, state, written.error, generation)
                 }
                 is AppResult.Failure -> {
-                    fetchStateDao.upsert(policy.failure(key, state, result.error))
+                    recordFailure(key, state, result.error, generation)
                     result
                 }
             }
@@ -145,6 +155,8 @@ class OfflineFirstElectionRepository @Inject constructor(
             ) { rows, state -> UnitOffices(ueCode, rows, state) }
         }
         return combine(perUnit) { unitOffices -> ballotOf(election, location, round, unitOffices.toList()) }
+            .distinctUntilChanged()
+            .flowOn(defaultDispatcher)
     }
 
     override suspend fun refreshBallotOffices(
@@ -160,33 +172,48 @@ class OfflineFirstElectionRepository @Inject constructor(
         return firstFailure ?: AppResult.Success(Unit)
     }
 
+    /**
+     * Refreshes still in flight drop their results ([CachePolicy.onCacheCleared]) and open-data
+     * downloads are cancelled, so this never waits for the network. Best effort on a broken
+     * disk: whatever could not be deleted now is retried by the next clear.
+     */
     override suspend fun clearCache() {
-        withContext(ioDispatcher) { db.clearAllTables() }
+        policy.onCacheCleared()
         openDataFiles.clear()
+        details.clear()
         selector.reset()
+        storageResult { withContext(ioDispatcher) { db.clearAllTables() } }
     }
 
     private suspend fun refreshOffices(election: Election, ueCode: String, force: Boolean): AppResult<Unit> {
         val key = FetchKeys.offices(election.id, ueCode)
         return locks.withLock(key) {
-            val state = fetchStateDao.get(key)
+            val state = when (val read = storageResult { fetchStateDao.get(key) }) {
+                is AppResult.Success -> read.value
+                is AppResult.Failure -> return@withLock read
+            }
             val ttl = policy.ttl(CacheKind.OFFICES, policy.isElectionWeek(listOf(election)))
             policy.resultWithoutFetch(state, ttl, force)?.let { return@withLock it }
+            val generation = policy.cacheGeneration()
             when (val result = api.fetchOffices(election, ueCode)) {
-                is AppResult.Success -> {
-                    db.withTransaction {
-                        officeDao.delete(election.id, ueCode)
-                        officeDao.insertAll(result.value.map { it.toEntity(election.id, ueCode) })
-                        fetchStateDao.upsert(policy.success(key, DataSource.DIVULGA_CAND_CONTAS))
-                    }
-                    AppResult.Success(Unit)
+                is AppResult.Success -> db.writeCache(policy, generation) {
+                    officeDao.delete(election.id, ueCode)
+                    officeDao.insertAll(result.value.map { it.toEntity(election.id, ueCode) })
+                    fetchStateDao.upsert(policy.success(key, DataSource.DIVULGA_CAND_CONTAS))
+                }.also { written ->
+                    if (written is AppResult.Failure) recordFailure(key, state, written.error, generation)
                 }
                 is AppResult.Failure -> {
-                    fetchStateDao.upsert(policy.failure(key, state, result.error))
+                    recordFailure(key, state, result.error, generation)
                     result
                 }
             }
         }
+    }
+
+    /** Best effort: on a full disk even this small write may fail, and the result stands anyway. */
+    private suspend fun recordFailure(key: String, previous: FetchStateEntity?, error: AppError, generation: Long) {
+        db.writeCache(policy, generation) { fetchStateDao.upsert(policy.failure(key, previous, error)) }
     }
 
     /**
@@ -224,7 +251,8 @@ class OfflineFirstElectionRepository @Inject constructor(
         )
     }
 
-    private suspend fun latestMunicipalElection(): Election? = electionDao.getAll()
+    private suspend fun latestMunicipalElection(): Election? = storageResult { electionDao.getAll() }
+        .valueOrNull().orEmpty()
         .mapNotNull { it.toDomainOrNull() }
         .filter { it.scope == ElectionScope.MUNICIPAL }
         .maxWithOrNull(compareBy<Election> { it.year }.thenBy { it.date ?: LocalDate.MIN })

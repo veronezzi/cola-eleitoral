@@ -20,6 +20,13 @@ sealed interface AppError {
     /** The body is not the expected JSON. */
     data object Parsing : AppError
 
+    /**
+     * Writing or reading local storage failed: disk full (`SQLiteFullException`), I/O error, or a
+     * file that can't be read right now. Nothing reached the network. UI message: "Pouco espaço
+     * ou erro de armazenamento no aparelho".
+     */
+    data object Storage : AppError
+
     data class Unknown(val cause: Throwable? = null) : AppError
 }
 
