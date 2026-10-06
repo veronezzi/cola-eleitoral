@@ -28,7 +28,7 @@ object TseEndpoints {
     /**
      * Honest User-Agent (ARCHITECTURE.md 2.7): the app's name and version, the Android release and
      * where to read about the app, never a browser's.
-     * Example: `ColaEleitoral/1.0.0 (Android 14; +https://veronezzi.github.io/cola-eleitoral-privacidade/)`.
+     * Example: `ColaEleitoral/1.0.0 (Android 14; +https://veronezzi.github.io/cola-eleitoral/privacidade/)`.
      */
     fun userAgent(versionName: String, androidRelease: String, privacyPolicyUrl: String): String =
         "ColaEleitoral/${token(versionName)} (Android ${token(androidRelease)}; +${privacyPolicyUrl.filter(::isUrlChar)})"

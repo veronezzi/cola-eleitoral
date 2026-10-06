@@ -714,8 +714,8 @@ vínculo com o TSE. Fonte dos dados: TSE.". Sem QR code, sem marca d'água rastr
 - **Política de privacidade:** fonte única em `docs/privacidade.md`. O build copia o arquivo sem
   alteração para `res/raw/privacy_policy.md` (tarefa `embedPrivacyPolicy`) e a tela o mostra inteiro;
   `scripts/render-privacy-page.py` gera do mesmo arquivo a página publicada em
-  https://veronezzi.github.io/cola-eleitoral-privacidade/ (repositório público
-  `veronezzi/cola-eleitoral-privacidade`). O Markdown usa só o subconjunto que os dois entendem
+  https://veronezzi.github.io/cola-eleitoral/privacidade/ (GitHub Pages da pasta `docs/` deste
+  repositório, que é público). O Markdown usa só o subconjunto que os dois entendem
   (título, seções, parágrafos, listas simples, negrito, código e links `<https://...>`), e o script
   falha com qualquer outra construção. Conteúdo: responsável (veronezzi) e contato; o que fica no
   aparelho e o que só fica em memória; hosts do TSE e o que recebem (IP, `User-Agent`, local, cargo e
@@ -869,7 +869,7 @@ sensível por desenho.
 | P5 | Deturpação: em conteúdo político, transparência extra sobre quem é o desenvolvedor e suas afiliações; nome e contato corretos | "Desenvolvido por veronezzi, sem vínculo com partidos, candidatos ou governo" em Sobre, na política e na descrição da loja; na conta pessoal, o Google mostra também o nome legal e o país | https://support.google.com/googleplay/android-developer/answer/9888689 |
 | P6 | Falsificação de identidade: proibido usar emblema nacional ou marca de governo sugerindo afiliação | Sem Brasão, sem logos do TSE/Justiça Eleitoral; ícone e nome próprios | https://support.google.com/googleplay/android-developer/answer/9888374 |
 | P7 | Comportamento enganoso: proibido conteúdo comprovadamente falso que interfira na votação ou sobre resultados | Só dados do TSE, literais, com data e link; regras de votação citam a lei | https://support.google.com/googleplay/android-developer/answer/9888077 |
-| P8 | Política de privacidade no campo do Play Console e dentro do app; URL pública, ativa, sem geobloqueio, não PDF; com contato, dados tratados, segurança, retenção e exclusão | Texto completo embutido de `docs/privacidade.md` + página gerada do mesmo arquivo em https://veronezzi.github.io/cola-eleitoral-privacidade/ (Q3); `check-store-metadata.sh --release` confere se está no ar e igual | https://support.google.com/googleplay/android-developer/answer/10144311 |
+| P8 | Política de privacidade no campo do Play Console e dentro do app; URL pública, ativa, sem geobloqueio, não PDF; com contato, dados tratados, segurança, retenção e exclusão | Texto completo embutido de `docs/privacidade.md` + página gerada do mesmo arquivo em https://veronezzi.github.io/cola-eleitoral/privacidade/ (Q3); `check-store-metadata.sh --release` confere se está no ar e igual | https://support.google.com/googleplay/android-developer/answer/10144311 |
 | P9 | Formulário Data safety obrigatório mesmo sem coleta; dado tratado só no aparelho não é declarado | Declarar "nenhum dado coletado nem compartilhado" (Q4) | https://support.google.com/googleplay/android-developer/answer/10787469 |
 | P10 | Seções de conteúdo do app: política de privacidade, anúncios, acesso (login), público-alvo, classificação, apps de notícias; declarações de saúde e de recursos financeiros para todo app | Anúncios: não; acesso: sem login; notícias: não; saúde: nenhum recurso; financeiro: nenhum | https://support.google.com/googleplay/android-developer/answer/9859455 ; https://support.google.com/googleplay/android-developer/answer/14738291 ; https://support.google.com/googleplay/android-developer/answer/13849271 |
 | P11 | Público-alvo: incluir menores de 13 aplica a política Famílias; declarar anúncios antes | Público 16-17 e 18+ (voto facultativo aos 16); sem anúncios | https://support.google.com/googleplay/android-developer/answer/9867159 |
@@ -944,8 +944,8 @@ Decididas (a execução está em `PUBLICACAO.md`):
   testadores por 14 dias; meta: teste fechado durante o 2º turno de 2026, produção em novembro de 2026
   e o app pronto para 2028.
 - **Q3. Política e contato:** responsável **veronezzi**, e-mail **veronezzi14@gmail.com**, política em
-  https://veronezzi.github.io/cola-eleitoral-privacidade/ (repositório público próprio; o código fica
-  num repositório privado). Os três valores vêm de `colaEleitoral.*` em `gradle.properties`.
+  https://veronezzi.github.io/cola-eleitoral/privacidade/ (GitHub Pages da pasta `docs/`; o repositório do
+  app é público). Os três valores vêm de `colaEleitoral.*` em `gradle.properties`.
 - **Q4. Data safety:** "nenhum dado coletado nem compartilhado"; a alternativa conservadora está em
   `data-safety.md`.
 - **Q5. Nome e pacote:** **Cola Eleitoral**, `com.veronezzi.colaeleitoral` (permanente após o 1º

@@ -2,8 +2,8 @@
 """Gera a pagina publica da politica de privacidade a partir de docs/privacidade.md.
 
 docs/privacidade.md e a fonte unica: o app embute esse arquivo no build e esta pagina e o mesmo texto
-em HTML. A saida, docs/privacidade/index.html, vai como index.html para a raiz do repositorio
-publico veronezzi/cola-eleitoral-privacidade (GitHub Pages; passo a passo em docs/PUBLICACAO.md).
+em HTML. A saida, docs/privacidade/index.html, e publicada pelo GitHub Pages da pasta docs/
+deste repositorio em https://veronezzi.github.io/cola-eleitoral/privacidade/ (passo a passo em docs/PUBLICACAO.md).
 Nao edite o HTML a mao: mude o Markdown e rode este script.
 
 Uso:

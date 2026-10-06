@@ -7,7 +7,7 @@ do Google pedir.
 
 Os rótulos estão em português, com o texto da interface em inglês entre parênteses, porque a tradução
 do Play Console muda com o tempo. O formulário é obrigatório mesmo para apps que não coletam nada, e
-a política de privacidade precisa estar publicada em <https://veronezzi.github.io/cola-eleitoral-privacidade/>
+a política de privacidade precisa estar publicada em <https://veronezzi.github.io/cola-eleitoral/privacidade/>
 (`PUBLICACAO.md`, seção 7) e informada em Conteúdo do app > Política de privacidade. As respostas
 abaixo dizem o mesmo que a política (`privacidade.md`, seções 2 a 5).
 

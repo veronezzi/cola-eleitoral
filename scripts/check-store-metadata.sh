@@ -311,7 +311,7 @@ if [ "$release" = 1 ] && ! is_placeholder "$url" && [[ "$url" == https://* ]]; t
     elif [ -f "$policy_html" ] && cmp -s -- "$published" "$policy_html"; then
       ok "política publicada: igual a docs/privacidade/index.html"
     else
-      err "a página em $url difere de docs/privacidade/index.html: copie o arquivo para o repositório veronezzi/cola-eleitoral-privacidade (docs/PUBLICACAO.md, seção 7; o GitHub Pages leva alguns minutos para atualizar)"
+      err "a página em $url difere de docs/privacidade/index.html: faça commit e push de docs/privacidade/index.html (docs/PUBLICACAO.md, seção 7; o GitHub Pages leva alguns minutos para atualizar)"
     fi
     rm -f -- "$published"
   else

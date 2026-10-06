@@ -28,7 +28,7 @@ política de privacidade ([`privacidade.md`](privacidade.md), da qual é gerada
 | Conta do Play Console | **Pessoal e nova**, criada com o Gmail veronezzi14@gmail.com. Por ser pessoal e criada depois de 13/11/2023, exige teste fechado com 12 testadores por 14 dias seguidos antes da produção (seção 13) |
 | Desenvolvedor e responsável pelos dados (controlador, na política) | **veronezzi**, sem vínculo com partidos, candidatos ou governo |
 | E-mail de contato público | **veronezzi14@gmail.com**: no app (Sobre), na política e na ficha da loja |
-| Política de privacidade | <https://veronezzi.github.io/cola-eleitoral-privacidade/>, publicada pelo GitHub Pages do repositório **público** `veronezzi/cola-eleitoral-privacidade` |
+| Política de privacidade | <https://veronezzi.github.io/cola-eleitoral/privacidade/>, publicada pelo GitHub Pages da pasta `docs/` do próprio repositório (público) `veronezzi/cola-eleitoral` |
 | Código do app | Repositório **privado** `veronezzi/cola-eleitoral` |
 | Segurança dos dados | "Nenhum dado coletado nem compartilhado" ([`data-safety.md`](data-safety.md)) |
 | Nome do app | Cola Eleitoral (histórico no fim deste guia) |
@@ -196,60 +196,38 @@ Os valores de `gradle.properties` já são os reais; as três variáveis opciona
 substituí-los sem commit. O workflow nunca imprime segredos: só os nomes dos que faltam. A chave é
 decodificada em `$RUNNER_TEMP` com permissão 600 e apagada no fim do job.
 
-## 7. Política de privacidade publicada: repositório público e GitHub Pages
+## 7. Política de privacidade publicada: GitHub Pages do repositório do app
 
 O texto tem uma fonte só, `docs/privacidade.md`: o app embute esse arquivo no build (Sobre >
 Política de privacidade) e `scripts/render-privacy-page.py` gera dele `docs/privacidade/index.html`,
-uma página autocontida (CSS embutido, sem scripts nem recursos externos). Como o repositório do código
-é privado, a página fica num repositório **público** só dela, `veronezzi/cola-eleitoral-privacidade`,
-com o `index.html` na raiz, e o GitHub Pages a publica em
-<https://veronezzi.github.io/cola-eleitoral-privacidade/>. Esse endereço só funciona se a conta do
-GitHub se chamar exatamente `veronezzi`; se for outra, troque a URL em `gradle.properties` e em
-`docs/privacidade.md` antes do primeiro release.
+uma página autocontida (CSS embutido, sem scripts nem recursos externos). O repositório
+`veronezzi/cola-eleitoral` é público, então o GitHub Pages publica a pasta `docs/` dele mesmo e a
+página fica em <https://veronezzi.github.io/cola-eleitoral/privacidade/>. O arquivo vazio
+`docs/.nojekyll` faz o Pages servir os arquivos como estão. Se o repositório virar privado, o Pages
+gratuito para de funcionar: aí a página precisa ir para um repositório público só dela, e a URL muda
+em `gradle.properties` e em `docs/privacidade.md`.
 
-1. Gere a página e confira (no repositório do código):
+1. Gere a página e confira; depois faça commit e push do `.md` junto com o `index.html`:
    ```bash
    python3 scripts/render-privacy-page.py
    scripts/check-store-metadata.sh
    ```
-2. Crie o repositório público (pelo site: New repository > `cola-eleitoral-privacidade` > Public, sem
-   README; ou pelo `gh`):
+2. Ligue o Pages, uma vez só: no repositório, Settings > Pages > Build and deployment > Source:
+   **Deploy from a branch**; Branch: **main**, pasta **/docs** > Save. Pelo `gh`:
    ```bash
-   gh repo create veronezzi/cola-eleitoral-privacidade --public \
-     --description "Política de privacidade do app Cola Eleitoral"
+   gh api -X POST repos/veronezzi/cola-eleitoral/pages \
+     -f "source[branch]=main" -f "source[path]=/docs"
    ```
-3. Copie a página para a raiz, com um `.nojekyll` vazio (o Pages serve os arquivos como estão), e
-   envie para a branch `main`:
+3. Espere a publicação (aba Actions, "pages build and deployment", alguns minutos) e confira:
    ```bash
-   git clone https://github.com/veronezzi/cola-eleitoral-privacidade.git
-   cd cola-eleitoral-privacidade
-   cp ../cola-eleitoral/docs/privacidade/index.html index.html
-   touch .nojekyll
-   git add index.html .nojekyll
-   git commit -m "Política de privacidade, versão 1"
-   git branch -M main
-   git push -u origin main
-   ```
-4. Ligue o Pages: no repositório público, Settings > Pages > Build and deployment > Source: **Deploy
-   from a branch**; Branch: **main**, pasta **/ (root)** > Save. Pelo `gh`:
-   ```bash
-   gh api -X POST repos/veronezzi/cola-eleitoral-privacidade/pages \
-     -f "source[branch]=main" -f "source[path]=/"
-   ```
-5. Espere a publicação (aba Actions, "pages build and deployment", alguns minutos) e confira:
-   ```bash
-   curl -fsSI https://veronezzi.github.io/cola-eleitoral-privacidade/   # HTTP/2 200
+   curl -fsSI https://veronezzi.github.io/cola-eleitoral/privacidade/   # HTTP/2 200
    scripts/check-store-metadata.sh --release   # também compara a página publicada com o arquivo
    ```
    Abra o endereço no celular. A URL tem de ser pública, sem login e sem bloqueio geográfico, e não
    pode ser PDF. O HTTPS do `github.io` já vem ligado.
-6. Informe a mesma URL no Play Console (Conteúdo do app > Política de privacidade, seção 11).
-
-**Para mudar a política depois:** edite `docs/privacidade.md` (com nova versão e data), rode
-`python3 scripts/render-privacy-page.py`, publique o novo `index.html` no repositório público e só
-então gere o AAB que embute o texto novo. Assim, a página publicada e o texto do app continuam iguais.
-Não mude o endereço: ele está no app (link "Ver a política na internet" e `User-Agent`), na política
-e no Play Console.
+4. Informe a mesma URL no Play Console (Conteúdo do app > Política de privacidade, seção 11).
+5. A cada mudança na política: edite `docs/privacidade.md`, rode o script, faça commit e push. O Pages
+   republica sozinho e o próximo build do app embute o texto novo.
 
 ## 8. Versionamento e workflow de release
 
@@ -321,7 +299,7 @@ Brasil; incluir outros países faz sentido só se a fonte de dados abertos funci
 
 | Seção | Resposta |
 |---|---|
-| Política de privacidade | <https://veronezzi.github.io/cola-eleitoral-privacidade/> (seção 7) |
+| Política de privacidade | <https://veronezzi.github.io/cola-eleitoral/privacidade/> (seção 7) |
 | Anúncios | **Não**, o app não contém anúncios |
 | Acesso ao app | **Todos os recursos estão disponíveis sem restrições** (não há login) |
 | Classificação do conteúdo | Questionário abaixo |
@@ -447,7 +425,7 @@ a neutralidade (item 4). Para fazer à mão, com o app final:
       nome exibido pode mudar depois; o pacote `com.veronezzi.colaeleitoral`, não.
 - [ ] Validação num aparelho no Brasil (seção 3) feita em dados móveis e em Wi-Fi.
 - [ ] Conta pessoal verificada (identidade e aparelho), com nome de desenvolvedor **veronezzi**.
-- [ ] Política publicada: `curl -fsSI https://veronezzi.github.io/cola-eleitoral-privacidade/`
+- [ ] Política publicada: `curl -fsSI https://veronezzi.github.io/cola-eleitoral/privacidade/`
       responde 200 e a página é igual a `docs/privacidade/index.html` (seção 7).
 - [ ] `scripts/check-store-metadata.sh --release` sem erros: ficha, política preenchida, HTML gerado
       do Markdown atual e página publicada igual.

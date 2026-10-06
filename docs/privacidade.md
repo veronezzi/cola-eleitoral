@@ -5,7 +5,7 @@
 Esta política explica quais dados o aplicativo Cola Eleitoral, para Android, trata, onde eles ficam e
 quais são os seus direitos pela Lei Geral de Proteção de Dados Pessoais (LGPD, Lei 13.709/2018). O
 mesmo texto aparece dentro do app, em Sobre > Política de privacidade, e no endereço
-<https://veronezzi.github.io/cola-eleitoral-privacidade/>.
+<https://veronezzi.github.io/cola-eleitoral/privacidade/>.
 
 ## Resumo
 
@@ -88,7 +88,7 @@ de distribuição de conteúdo do site) recebem:
   cópia, a versão dela (ETag), para não baixar de novo o que não mudou;
 - o cabeçalho **`User-Agent`**, com o nome e a versão do app, a versão do Android e o endereço desta
   política, por exemplo
-  `ColaEleitoral/1.0.0 (Android 16; +https://veronezzi.github.io/cola-eleitoral-privacidade/)`. Ele
+  `ColaEleitoral/1.0.0 (Android 16; +https://veronezzi.github.io/cola-eleitoral/privacidade/)`. Ele
   não identifica você nem o aparelho.
 
 O local enviado é o que você escolheu na tela de local de votação (pode ser qualquer UF ou

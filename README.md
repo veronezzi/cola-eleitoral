@@ -42,8 +42,8 @@ papel pode.
 - Política de privacidade: [`docs/privacidade.md`](docs/privacidade.md) é a fonte única. O app embute
   esse texto no build e `scripts/render-privacy-page.py` gera dele a página
   [`docs/privacidade/index.html`](docs/privacidade/index.html), publicada em
-  <https://veronezzi.github.io/cola-eleitoral-privacidade/> (repositório público
-  `veronezzi/cola-eleitoral-privacidade`). Formulário Segurança dos dados do Google Play:
+  <https://veronezzi.github.io/cola-eleitoral/privacidade/> pelo GitHub Pages da pasta `docs/` deste
+  repositório. Formulário Segurança dos dados do Google Play:
   [`docs/data-safety.md`](docs/data-safety.md).
 
 ## Fonte dos dados e atribuição
@@ -130,7 +130,7 @@ docs/                           arquitetura, publicação, política de privacid
   riscos e decisões em aberto.
 - [`docs/PUBLICACAO.md`](docs/PUBLICACAO.md): publicação no Google Play, passo a passo.
 - [`docs/privacidade.md`](docs/privacidade.md): política de privacidade (LGPD), embutida no app e
-  publicada em <https://veronezzi.github.io/cola-eleitoral-privacidade/>.
+  publicada em <https://veronezzi.github.io/cola-eleitoral/privacidade/>.
 - [`docs/data-safety.md`](docs/data-safety.md): respostas do formulário Segurança dos dados.
 
 ## Licenças
