@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Gavel
 import androidx.compose.material.icons.outlined.HowToVote
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.Settings
@@ -212,6 +213,9 @@ private fun androidx.compose.foundation.lazy.LazyListScope.homeContent(
             }
         }
         is BallotSection.Slots -> {
+            if (ballot.pendingResultOffices.isNotEmpty()) {
+                item(key = "runoff-pending") { RunoffPendingCard(offices = ballot.pendingResultOffices) }
+            }
             items(ballot.slots, key = { it.key }) { slot ->
                 BallotSlotRow(
                     slot = slot,
@@ -407,6 +411,26 @@ private fun ReminderCard(onEnable: () -> Unit) {
 }
 
 /** Fixed notice: the phone does not enter the booth (Lei 9.504/97, art. 91-A). */
+/** Second round: offices kept on the ballot because the TSE hasn't published their first-round result. */
+@Composable
+private fun RunoffPendingCard(offices: List<String>) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+    ) {
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
+            Icon(Icons.Outlined.Info, contentDescription = null)
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = stringResource(R.string.home_runoff_pending, offices.joinToString(", ")),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
+}
+
 @Composable
 private fun BoothNoticeCard() {
     Card(

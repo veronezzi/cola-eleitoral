@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.PersonSearch
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SearchOff
@@ -58,6 +59,7 @@ import com.veronezzi.colaeleitoral.R
 import com.veronezzi.colaeleitoral.domain.model.FilterOptions
 import com.veronezzi.colaeleitoral.domain.model.Office
 import com.veronezzi.colaeleitoral.domain.model.Party
+import com.veronezzi.colaeleitoral.domain.model.RunoffStatus
 import com.veronezzi.colaeleitoral.domain.model.SortOrder
 import com.veronezzi.colaeleitoral.ui.common.SecureScreen
 import com.veronezzi.colaeleitoral.ui.common.slotLabel
@@ -155,6 +157,9 @@ fun CandidateListScreen(
                 item(key = "summary") {
                     ListSummary(state = state, onOpenFilters = { showFilters = true })
                 }
+                state.runoffStatus?.takeIf { it != RunoffStatus.RUNOFF }?.let { status ->
+                    item(key = "runoff-notice") { RunoffNotice(status) }
+                }
                 when (val content = state.content) {
                     ListContent.Loading -> item(key = "loading") {
                         ListSkeleton(description = stringResource(R.string.list_loading))
@@ -237,6 +242,26 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp)
                 .testTag(SEARCH_TEST_TAG),
+        )
+    }
+}
+
+/** Second round, no candidate marked "2º turno": says why the list shows everybody. */
+@Composable
+private fun RunoffNotice(status: RunoffStatus) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Icon(Icons.Outlined.Info, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = stringResource(
+                if (status == RunoffStatus.DECIDED) R.string.list_runoff_decided else R.string.list_runoff_pending,
+            ),
+            style = MaterialTheme.typography.bodyMedium,
         )
     }
 }

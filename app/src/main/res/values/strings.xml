@@ -71,7 +71,8 @@
     <string name="home_no_pick">Sem escolha</string>
     <string name="home_see_ballot">Ver minha cola</string>
     <string name="home_no_runoff_title">Não há 2º turno para o seu local</string>
-    <string name="home_no_runoff_message">O TSE não marcou candidatos do 2º turno nas unidades em que você vota. Se isso mudar, eles aparecem aqui.</string>
+    <string name="home_no_runoff_message">Pelo resultado publicado pelo TSE, os cargos das unidades em que você vota foram decididos no 1º turno.</string>
+    <string name="home_runoff_pending">O TSE ainda não publicou quem foi para o 2º turno de: %1$s. Até lá, o cargo continua na cédula e a lista mostra todas as candidaturas.</string>
     <string name="home_see_first_round">Ver cédula do 1º turno</string>
     <string name="home_no_location_title">Escolha onde você vota</string>
     <string name="home_no_location_message">Com a UF (e, nas eleições municipais, o município), o app monta a sua cédula.</string>
@@ -156,6 +157,8 @@
     <string name="list_empty_tse_message">O TSE não lista candidatos para este cargo neste local.</string>
     <string name="list_empty_filters_title">Nenhum candidato com esses filtros</string>
     <string name="list_empty_filters_message">Mude a busca ou limpe os filtros para ver todas as candidaturas.</string>
+    <string name="list_runoff_pending">O TSE ainda não publicou quem foi para o 2º turno deste cargo. Até lá, a lista mostra todas as candidaturas.</string>
+    <string name="list_runoff_decided">Pelo resultado publicado pelo TSE, este cargo foi decidido no 1º turno neste local.</string>
     <string name="list_empty_runoff_message">O TSE ainda não marcou candidatos do 2º turno para este cargo. Desligue “Só candidatos do 2º turno” nos filtros para ver todas as candidaturas.</string>
     <string name="list_clear_filters">Limpar filtros</string>
     <string name="list_open_detail">Ver detalhes</string>

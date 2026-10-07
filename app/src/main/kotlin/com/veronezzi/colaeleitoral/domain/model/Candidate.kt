@@ -22,10 +22,17 @@ data class CandidateStatus(
     val isInSecondRound: Boolean
         get() = totalization?.let { isSecondRoundText(it) } == true
 
+    /** True when the TSE marks the candidate as elected ("Eleito", "ELEITO POR QP"...), never "Não eleito". */
+    val isElected: Boolean
+        get() = totalization?.let { isElectedText(it) } == true
+
     companion object {
         private val SECOND_ROUND = Regex("""^\s*2\s*[º°o]?\s*turno\s*$""", RegexOption.IGNORE_CASE)
+        private val ELECTED = Regex("""^eleit[oa](\s+por\s+.+)?$""")
 
         fun isSecondRoundText(text: String): Boolean = SECOND_ROUND.matches(text)
+
+        fun isElectedText(text: String): Boolean = ELECTED.matches(normalizeForSearch(text))
     }
 }
 

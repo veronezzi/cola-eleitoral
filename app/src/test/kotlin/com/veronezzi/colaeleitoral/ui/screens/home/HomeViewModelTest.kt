@@ -92,11 +92,60 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `says there is no runoff here when no office has one`() = runTest {
+    fun `says there is no runoff here only when every office has a first-round winner`() = runTest {
+        candidates.setCandidates(
+            ELECTION_ID,
+            "BR",
+            OfficeRules.PRESIDENT,
+            listOf(UiTestData.candidate(10, 13, "Ana Eleita", "PAE", officeCode = OfficeRules.PRESIDENT, ueCode = "BR", totalization = "Eleito")),
+        )
+        candidates.setCandidates(
+            ELECTION_ID,
+            "SP",
+            OfficeRules.GOVERNOR,
+            listOf(UiTestData.candidate(11, 22, "Hugo Eleito", "PHE", officeCode = OfficeRules.GOVERNOR, totalization = "ELEITO")),
+        )
+        viewModel(clockAt = "2026-10-10T15:00:00Z").uiState.test {
+            assertEquals(BallotSection.NoRunoffHere, expectMostRecentItem().ballot)
+        }
+    }
+
+    @Test
+    fun `keeps offices whose first-round result the TSE has not published yet`() = runTest {
+        // Real open data of 05/10/2026: governor already decided, every president still "#NULO".
+        candidates.setCandidates(
+            ELECTION_ID,
+            "BR",
+            OfficeRules.PRESIDENT,
+            listOf(
+                UiTestData.candidate(10, 13, "Gil Nulo", "PGN", officeCode = OfficeRules.PRESIDENT, ueCode = "BR", totalization = null),
+                UiTestData.candidate(12, 45, "Rui Nulo", "PRN", officeCode = OfficeRules.PRESIDENT, ueCode = "BR", totalization = null),
+            ),
+        )
+        candidates.setCandidates(
+            ELECTION_ID,
+            "SP",
+            OfficeRules.GOVERNOR,
+            listOf(
+                UiTestData.candidate(11, 22, "Hugo Eleito", "PHE", officeCode = OfficeRules.GOVERNOR, totalization = "ELEITO"),
+                UiTestData.candidate(14, 33, "Ivo Fora", "PIF", officeCode = OfficeRules.GOVERNOR, totalization = "NÃO ELEITO"),
+            ),
+        )
+        viewModel(clockAt = "2026-10-10T15:00:00Z").uiState.test {
+            val ballot = expectMostRecentItem().ballot as BallotSection.Slots
+            assertEquals(listOf(OfficeRules.PRESIDENT), ballot.slots.map { it.office.code })
+            assertEquals(listOf("Presidente"), ballot.pendingResultOffices)
+        }
+    }
+
+    @Test
+    fun `empty lists between the rounds are pending, not a missing runoff`() = runTest {
         candidates.setCandidates(ELECTION_ID, "BR", OfficeRules.PRESIDENT, emptyList())
         candidates.setCandidates(ELECTION_ID, "SP", OfficeRules.GOVERNOR, emptyList())
         viewModel(clockAt = "2026-10-10T15:00:00Z").uiState.test {
-            assertEquals(BallotSection.NoRunoffHere, expectMostRecentItem().ballot)
+            val ballot = expectMostRecentItem().ballot as BallotSection.Slots
+            assertEquals(setOf(OfficeRules.PRESIDENT, OfficeRules.GOVERNOR), ballot.slots.map { it.office.code }.toSet())
+            assertEquals(2, ballot.pendingResultOffices.size)
         }
     }
 

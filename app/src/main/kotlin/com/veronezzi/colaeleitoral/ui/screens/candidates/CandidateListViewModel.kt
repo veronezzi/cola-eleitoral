@@ -16,9 +16,11 @@ import com.veronezzi.colaeleitoral.domain.model.FilterOptions
 import com.veronezzi.colaeleitoral.domain.model.Office
 import com.veronezzi.colaeleitoral.domain.model.OfficeRules
 import com.veronezzi.colaeleitoral.domain.model.Round
+import com.veronezzi.colaeleitoral.domain.model.RunoffStatus
 import com.veronezzi.colaeleitoral.domain.model.SortOrder
 import com.veronezzi.colaeleitoral.domain.model.VoterLocation
 import com.veronezzi.colaeleitoral.domain.model.filteredBy
+import com.veronezzi.colaeleitoral.domain.model.runoffStatusOf
 import com.veronezzi.colaeleitoral.domain.repository.BallotRepository
 import com.veronezzi.colaeleitoral.domain.repository.CandidateRepository
 import com.veronezzi.colaeleitoral.domain.repository.ElectionRepository
@@ -96,6 +98,8 @@ data class CandidateListUiState(
     val isRefreshing: Boolean = false,
     /** Photos only for majoritarian offices (ARCHITECTURE.md 2.9); initials for everybody else. */
     val showPhotos: Boolean = false,
+    /** Second round only, once the list was downloaded: what the TSE published about this runoff. */
+    val runoffStatus: RunoffStatus? = null,
 ) {
     val hasSeveralSeats: Boolean get() = maxPicks > 1
 
@@ -104,6 +108,16 @@ data class CandidateListUiState(
 }
 
 private data class ListRefresh(val isRefreshing: Boolean = false, val error: AppError? = null)
+
+/** [onlyRunoffChoice] is null until the user touches the "Só 2º turno" switch. */
+private data class FilterInputs(val filter: CandidateFilter, val onlyRunoffChoice: Boolean?)
+
+private data class FilteredList(
+    val cached: CachedData<List<Candidate>>,
+    val items: List<Candidate>,
+    val filter: CandidateFilter,
+    val runoff: RunoffStatus,
+)
 
 /**
  * Every candidate the TSE lists for one office and unit (ARCHITECTURE.md 4.4). Default order is
@@ -140,30 +154,40 @@ class CandidateListViewModel @AssistedInject constructor(
     private val savedQuery = savedStateHandle.getStateFlow(KEY_QUERY, "")
     private val parties = savedStateHandle.getStateFlow(KEY_PARTIES, arrayListOf<String>())
     private val statuses = savedStateHandle.getStateFlow(KEY_STATUSES, arrayListOf<String>())
-    private val onlyRunoff = savedStateHandle.getStateFlow(KEY_ONLY_RUNOFF, round == Round.SECOND)
+    private val onlyRunoffChoice = savedStateHandle.getStateFlow<Boolean?>(KEY_ONLY_RUNOFF, null)
     private val sort = savedStateHandle.getStateFlow(KEY_SORT, SortOrder.NUMBER.name)
 
     private val debouncedQuery: Flow<String> = savedQuery
         .debounce { text -> if (text.isEmpty()) 0L else SEARCH_DEBOUNCE_MILLIS }
         .distinctUntilChanged()
 
-    private val filter: Flow<CandidateFilter> = combine(debouncedQuery, parties, statuses, onlyRunoff, sort) {
-            text, parties, statuses, onlyRunoff, sort ->
-        CandidateFilter(
-            query = text,
-            partyAcronyms = parties.toSet(),
-            registrationStatuses = statuses.toSet(),
-            onlySecondRound = onlyRunoff,
-            sortOrder = SortOrder.entries.firstOrNull { it.name == sort } ?: SortOrder.NUMBER,
+    private val filterInputs: Flow<FilterInputs> = combine(debouncedQuery, parties, statuses, onlyRunoffChoice, sort) {
+            text, parties, statuses, onlyRunoffChoice, sort ->
+        FilterInputs(
+            filter = CandidateFilter(
+                query = text,
+                partyAcronyms = parties.toSet(),
+                registrationStatuses = statuses.toSet(),
+                sortOrder = SortOrder.entries.firstOrNull { it.name == sort } ?: SortOrder.NUMBER,
+            ),
+            onlyRunoffChoice = onlyRunoffChoice,
         )
     }.distinctUntilChanged()
 
     private val candidates: Flow<CachedData<List<Candidate>>> =
         candidateRepository.observeCandidates(route.electionId, route.ueCode, route.officeCode)
 
-    private val filtered: Flow<Pair<CachedData<List<Candidate>>, List<Candidate>>> =
-        combine(candidates, filter) { cached, filter -> cached to cached.value.filteredBy(filter) }
-            .flowOn(dispatchers.default)
+    /**
+     * In the second round the list starts with only the runoff candidates, but only once the TSE
+     * marked somebody: while the first-round result isn't published it shows everybody.
+     */
+    private val filtered: Flow<FilteredList> =
+        combine(candidates, filterInputs) { cached, inputs ->
+            val runoff = runoffStatusOf(cached.value)
+            val onlyRunoff = inputs.onlyRunoffChoice ?: (round == Round.SECOND && runoff == RunoffStatus.RUNOFF)
+            val filter = inputs.filter.copy(onlySecondRound = onlyRunoff)
+            FilteredList(cached, cached.value.filteredBy(filter), filter, runoff)
+        }.flowOn(dispatchers.default)
 
     private val election: Flow<Election?> = electionRepository.observeElections()
         .map { cached -> cached.value.firstOrNull { it.id == route.electionId } }
@@ -183,13 +207,15 @@ class CandidateListViewModel @AssistedInject constructor(
     private val picks = ballotRepository.observeBallot(route.electionId, round)
 
     val uiState: StateFlow<CandidateListUiState> = combine(
-        combine(filtered, filter) { filtered, filter -> filtered to filter },
+        filtered,
         candidateRepository.observeFilterOptions(route.electionId, route.ueCode, route.officeCode),
         offices,
         combine(picks, location) { picks, location -> picks to location },
         refresh,
-    ) { (filtered, filter), options, offices, (picks, location), refresh ->
-        val (cached, list) = filtered
+    ) { filtered, options, offices, (picks, location), refresh ->
+        val cached = filtered.cached
+        val list = filtered.items
+        val filter = filtered.filter
         val office = offices.firstOrNull { it.code == route.officeCode }
         val samePick = picks.firstOrNull { it.officeCode == route.officeCode && it.slot == route.slot }
         val otherSlots = picks.filter { it.officeCode == route.officeCode && it.slot != route.slot }
@@ -232,6 +258,7 @@ class CandidateListViewModel @AssistedInject constructor(
             freshness = cached.toFreshness(),
             isRefreshing = refresh.isRefreshing,
             showPhotos = route.officeCode in MAJORITARIAN_OFFICES,
+            runoffStatus = filtered.runoff.takeIf { round == Round.SECOND && cached.fetchedAt != null },
         )
     }.stateIn(
         scope = viewModelScope,
@@ -243,7 +270,6 @@ class CandidateListViewModel @AssistedInject constructor(
             slot = route.slot,
             maxPicks = OfficeRules.maxPicks(route.officeCode, route.year, round),
             isSecondRound = round == Round.SECOND,
-            filter = CandidateFilter(onlySecondRound = round == Round.SECOND),
         ),
     )
 

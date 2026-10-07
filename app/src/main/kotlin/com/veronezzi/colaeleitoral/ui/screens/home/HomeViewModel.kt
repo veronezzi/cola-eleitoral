@@ -6,13 +6,14 @@ import com.veronezzi.colaeleitoral.domain.model.AppError
 import com.veronezzi.colaeleitoral.domain.model.AppResult
 import com.veronezzi.colaeleitoral.domain.model.BallotPick
 import com.veronezzi.colaeleitoral.domain.model.CachedData
-import com.veronezzi.colaeleitoral.domain.model.CandidateFilter
 import com.veronezzi.colaeleitoral.domain.model.Election
 import com.veronezzi.colaeleitoral.domain.model.ElectionScope
 import com.veronezzi.colaeleitoral.domain.model.Office
 import com.veronezzi.colaeleitoral.domain.model.Round
+import com.veronezzi.colaeleitoral.domain.model.RunoffStatus
 import com.veronezzi.colaeleitoral.domain.model.UserSettings
 import com.veronezzi.colaeleitoral.domain.model.VoterLocation
+import com.veronezzi.colaeleitoral.domain.model.runoffStatusOf
 import com.veronezzi.colaeleitoral.domain.repository.BallotRepository
 import com.veronezzi.colaeleitoral.domain.repository.CandidateRepository
 import com.veronezzi.colaeleitoral.domain.repository.ElectionRepository
@@ -82,10 +83,14 @@ sealed interface BallotSection {
 
     data class Unavailable(val reason: NoBallotReason) : BallotSection
 
-    /** Second round, and the TSE marks no candidate of the voter's units as "2º turno". */
+    /** Second round, and the TSE published a first-round winner for every office of the voter's units. */
     data object NoRunoffHere : BallotSection
 
-    data class Slots(val slots: List<BallotSlot>) : BallotSection
+    /**
+     * @property pendingResultOffices second round only: offices whose first-round result the TSE
+     * hasn't published yet. They stay on the ballot, with a notice, until it does.
+     */
+    data class Slots(val slots: List<BallotSlot>, val pendingResultOffices: List<String> = emptyList()) : BallotSection
 }
 
 data class HomeUiState(
@@ -121,8 +126,8 @@ private data class HomeContext(
     val today: LocalDate,
 )
 
-/** Whether the voter's unit has a runoff for an office, once its list was downloaded. */
-private data class RunoffInfo(val known: Boolean, val hasCandidates: Boolean)
+/** What the TSE published about the runoff of an office in the voter's unit, once its list was downloaded. */
+private data class RunoffInfo(val known: Boolean, val status: RunoffStatus)
 
 /**
  * Home: the election card, the voter's ballot in urna order with the saved picks, and the
@@ -267,7 +272,7 @@ class HomeViewModel @Inject constructor(
             if (election == null || !ctx.settings.reminderEnabled) return@launch
             val key = ctx.ballotKey()
             val runoff = runoffOf(key?.election, key?.let { officesOf(it).first() }).first()
-            schedule(ReminderPlan(election, runoff.values.any { it.known && it.hasCandidates }, ctx.today))
+            schedule(ReminderPlan(election, runoff.values.any { it.known && it.status == RunoffStatus.RUNOFF }, ctx.today))
         }
     }
 
@@ -288,10 +293,9 @@ class HomeViewModel @Inject constructor(
                         electionId = election.election.id,
                         ueCode = office.ueCode,
                         officeCode = office.code,
-                        filter = CandidateFilter(onlySecondRound = true),
                     )
                     .map { cached ->
-                        office.code to RunoffInfo(known = cached.fetchedAt != null, hasCandidates = cached.value.isNotEmpty())
+                        office.code to RunoffInfo(known = cached.fetchedAt != null, status = runoffStatusOf(cached.value))
                     }
             },
         ) { entries -> entries.toMap() }
@@ -358,12 +362,27 @@ class HomeViewModel @Inject constructor(
             municipal && location.municipality == null -> BallotSection.Unavailable(NoBallotReason.NEEDS_MUNICIPALITY)
             offices == null || offices.value.isEmpty() -> BallotSection.Loading
             else -> {
-                val visible = if (election.round == Round.SECOND) {
-                    offices.value.filter { office -> runoff[office.code]?.let { !it.known || it.hasCandidates } ?: true }
+                // Only a published first-round winner removes an office: "#NULO" or an empty list
+                // means the TSE hasn't loaded the result yet, not that there is no runoff.
+                val secondRound = election.round == Round.SECOND
+                val visible = if (secondRound) {
+                    offices.value.filter { office ->
+                        runoff[office.code]?.let { !it.known || it.status != RunoffStatus.DECIDED } ?: true
+                    }
                 } else {
                     offices.value
                 }
-                if (visible.isEmpty()) BallotSection.NoRunoffHere else BallotSection.Slots(buildBallotSlots(visible, picks))
+                val pending = if (secondRound) {
+                    visible.filter { office -> runoff[office.code]?.let { it.known && it.status == RunoffStatus.PENDING } == true }
+                        .map { it.name }
+                } else {
+                    emptyList()
+                }
+                if (visible.isEmpty()) {
+                    BallotSection.NoRunoffHere
+                } else {
+                    BallotSection.Slots(buildBallotSlots(visible, picks), pendingResultOffices = pending)
+                }
             }
         }
     }

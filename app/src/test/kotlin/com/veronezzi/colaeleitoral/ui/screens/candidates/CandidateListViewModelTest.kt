@@ -5,6 +5,7 @@ import app.cash.turbine.test
 import com.veronezzi.colaeleitoral.domain.model.AppError
 import com.veronezzi.colaeleitoral.domain.model.AppResult
 import com.veronezzi.colaeleitoral.domain.model.OfficeRules
+import com.veronezzi.colaeleitoral.domain.model.RunoffStatus
 import com.veronezzi.colaeleitoral.domain.model.SortOrder
 import com.veronezzi.colaeleitoral.domain.model.UserSettings
 import com.veronezzi.colaeleitoral.ui.common.UiDispatchers
@@ -20,6 +21,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -183,4 +185,42 @@ class CandidateListViewModelTest {
             assertEquals(2, expectMostRecentItem().items.size)
         }
     }
+
+    @Test
+    fun `second round shows everybody while the TSE has not published the result`() = runTest {
+        val first = UiTestData.candidate(10, 13, "Gil Nulo", "PGN", officeCode = OfficeRules.GOVERNOR, totalization = null)
+        val second = UiTestData.candidate(11, 22, "Hugo Nulo", "PHN", officeCode = OfficeRules.GOVERNOR, totalization = null)
+        candidates.setCandidates(ELECTION_ID, "SP", OfficeRules.GOVERNOR, listOf(first, second))
+        val vm = secondRoundViewModel()
+        vm.uiState.test {
+            val state = expectMostRecentItem()
+            assertFalse(state.filter.onlySecondRound)
+            assertEquals(2, state.items.size)
+            assertEquals(RunoffStatus.PENDING, state.runoffStatus)
+        }
+    }
+
+    @Test
+    fun `second round of a decided office says so and shows everybody`() = runTest {
+        val elected = UiTestData.candidate(10, 13, "Ana Eleita", "PAE", officeCode = OfficeRules.GOVERNOR, totalization = "ELEITO")
+        val out = UiTestData.candidate(11, 22, "Hugo Fora", "PHF", officeCode = OfficeRules.GOVERNOR, totalization = "NÃO ELEITO")
+        candidates.setCandidates(ELECTION_ID, "SP", OfficeRules.GOVERNOR, listOf(elected, out))
+        val vm = secondRoundViewModel()
+        vm.uiState.test {
+            val state = expectMostRecentItem()
+            assertFalse(state.filter.onlySecondRound)
+            assertEquals(2, state.items.size)
+            assertEquals(RunoffStatus.DECIDED, state.runoffStatus)
+        }
+    }
+
+    private fun secondRoundViewModel() = CandidateListViewModel(
+        route = CandidateListRoute(ELECTION_ID, 2026, "SP", OfficeRules.GOVERNOR, round = 2),
+        savedStateHandle = SavedStateHandle(),
+        candidateRepository = candidates,
+        electionRepository = elections,
+        settingsRepository = settings,
+        ballotRepository = ballot,
+        dispatchers = UiDispatchers(mainDispatcherRule.dispatcher),
+    )
 }
